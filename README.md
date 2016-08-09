@@ -12,3 +12,8 @@ A tool to be run for a Jenkins job to search a text with regular expressions in 
 Change the path to out/artifacts/searchinjenkinslogs_jar/ directory and run:
 
 java -DjobUrl="$jobUrl" -DthreadsCount=20 -Dbuilds="112,114-116,118" -DlastBuildsCount=2 -DartifactsFilters=".* fileFilter1.* ,.* fileFilter2.* " -DsearchedText=".* textToFind.* " -cp searchinjenkinslogs.jar Main
+
+## IDE:
+Easy to integrate the project with Intellij, JDK 8
+
+## Please, give a star to this project if it helps you.
