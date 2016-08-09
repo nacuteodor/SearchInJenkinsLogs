@@ -1,0 +1,16 @@
+<component name="libraryTable">
+  <library name="com.jayway.jsonpath:json-path:0.8.1" type="repository">
+    <properties maven-id="com.jayway.jsonpath:json-path:0.8.1" />
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/jayway/jsonpath/json-path/0.8.1/json-path-0.8.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/net/minidev/json-smart/1.1.1/json-smart-1.1.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/commons-lang/commons-lang/2.6/commons-lang-2.6.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/com/jayway/jsonpath/json-path/0.8.1/json-path-0.8.1-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/jayway/jsonpath/json-path/0.8.1/json-path-0.8.1-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

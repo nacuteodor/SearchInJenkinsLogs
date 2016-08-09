@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="JAVA_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/java" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta110" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta1" level="project" />
+    <orderEntry type="library" name="SearchInJenkinsLogs1" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta119" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta12" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta18" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta111" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta15" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta113" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta14" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta19" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta120" level="project" />
+    <orderEntry type="library" name="client-combined-3.0.0-beta1-nodeps1" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta118" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta116" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta115" level="project" />
+    <orderEntry type="library" name="classes" level="project" />
+    <orderEntry type="library" name="client-combined-3.0.0-beta1-nodeps" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta112" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta114" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta17" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta13" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta11" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta117" level="project" />
+    <orderEntry type="library" name="selenium-server-standalone-3.0.0-beta16" level="project" />
+  </component>
+</module>
