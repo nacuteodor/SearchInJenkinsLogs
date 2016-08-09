@@ -92,8 +92,15 @@ public class Main {
         String lastNBuildNumbersJsonPath = "$.builds[:" + lastBuildsCount + "].number";
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
-        String jobResponse = getUrlResponse(jobUrl + "/api/json");
-        List<Integer> lastNBuilds = JsonPath.read(jobResponse, lastNBuildNumbersJsonPath);
+        String apiJobUrl = jobUrl + "/api/json";
+        String jobResponse = getUrlResponse(apiJobUrl);
+        List<Integer> lastNBuilds = null;
+        try {
+            lastNBuilds = JsonPath.read(jobResponse, lastNBuildNumbersJsonPath);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Exception when parsing the job api response for URL " + apiJobUrl + " : " + jobResponse, e);
+        }
+
         builds.addAll(lastNBuilds);
         System.out.println("Parameter builds=" + builds);
         Filter buildsFilter = Filter.filter(
