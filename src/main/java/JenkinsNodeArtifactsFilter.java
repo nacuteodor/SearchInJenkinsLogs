@@ -50,7 +50,7 @@ public class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifacts
      * @throws IOException
      */
     private void processNode() throws IOException {
-        String nodeUrlResp = Main.getUrlResponse(nodeUrl);
+        String nodeUrlResp = Main.getUrlResponse(nodeUrl + "/api/json");
         List<String> artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
         for (String artifactRelativePath : artifactsRelativePaths) {
             if (!Main.artifactUrlMatchesFilters(artifactRelativePath, artifactsFilters)) {

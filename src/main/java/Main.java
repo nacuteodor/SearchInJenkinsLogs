@@ -92,7 +92,7 @@ public class Main {
         String lastNBuildNumbersJsonPath = "$.builds[:" + lastBuildsCount + "].number";
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
-        String jobResponse = getUrlResponse(jobUrl);
+        String jobResponse = getUrlResponse(jobUrl + "/api/json");
         List<Integer> lastNBuilds = JsonPath.read(jobResponse, lastNBuildNumbersJsonPath);
         builds.addAll(lastNBuilds);
         System.out.println("Parameter builds=" + builds);
@@ -109,7 +109,7 @@ public class Main {
         for (JSONObject buildJson : buildsJsons) {
             Integer buildNumber = JsonPath.read(buildJson, buildNumberJsonPath);
             String buildUrl = JsonPath.read(buildJson, urlJsonPath);
-            String buildApiResp = getUrlResponse(buildUrl);
+            String buildApiResp = getUrlResponse(buildUrl + "/api/json");
             List<String> nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
 
             for (String nodeUrl : nodesUrls) {
