@@ -7,6 +7,7 @@ A tool to be run for a Jenkins job to search a text with regular expressions in 
 - the artifacts files can be filter using regular expressions and more filters could be applied separated with commas ","
 - parallel processing, searches the regular expression for each build node in a separated thread for a better performance
 - the thread count can be specified in -DthreadsCount property
+- because it's done in Java it works cross platform for Windows, Unix, OS X Jenkins applications
 
 ## Usage e.g:
 Change the path to out/artifacts/searchinjenkinslogs_jar/ directory and run:
