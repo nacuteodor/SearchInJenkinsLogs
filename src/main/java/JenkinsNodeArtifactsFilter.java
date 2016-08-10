@@ -8,21 +8,28 @@ import java.util.concurrent.Callable;
 /**
  * Created by Teo on 8/8/2016.
  */
-public class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter> {
+class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter> {
 
-    public final Integer                        buildNumber;
-    public final String                         nodeUrl;
-    private final String                        artifactsFilters;
-    private final String                        searchedText;
-    public List<String>                         matchedArtifacts = new ArrayList<String>();
+    final Integer                        buildNumber;
+    final String                         jobUrl;
+    final String                         newUrlPrefix;
+    final String                         nodeUrl;
+    private final String                 artifactsFilters;
+    private final String                 searchedText;
 
-    public JenkinsNodeArtifactsFilter(
+    List<String>                         matchedArtifacts = new ArrayList<>();
+
+    JenkinsNodeArtifactsFilter(
+            String jobUrl,
+            String newUrlPrefix,
             Integer buildNumber,
             String nodeUrl,
             String artifactsFilters,
             String searchedText) {
 
+        this.jobUrl = jobUrl;
         this.buildNumber = buildNumber;
+        this.newUrlPrefix = newUrlPrefix;
         this.nodeUrl = nodeUrl;
         this.artifactsFilters = artifactsFilters;
         this.searchedText = searchedText;
@@ -46,11 +53,9 @@ public class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifacts
     /**
      * Find the searched text @searchedText in the current build node artifacts in a new thread.
      * Saves the artifacts where it finds the @searchedText in matchedArtifacts list
-     *
-     * @throws IOException
      */
     private void processNode() throws IOException {
-        String nodeUrlResp = Main.getUrlResponse(nodeUrl + "/api/json");
+        String nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(jobUrl, newUrlPrefix) + "/api/json");
         List<String> artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
         for (String artifactRelativePath : artifactsRelativePaths) {
             if (!Main.artifactUrlMatchesFilters(artifactRelativePath, artifactsFilters)) {

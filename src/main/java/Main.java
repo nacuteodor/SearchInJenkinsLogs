@@ -26,10 +26,8 @@ public class Main {
     static final String artifactsRelativePathJsonPath = "$.artifacts[*].relativePath";
 
     static String getUrlResponse(String urlString) throws IOException {
-        String apiResponse = "";
         URL url = new URL(urlString);
-        apiResponse = IOUtils.toString(new InputStreamReader(url.openStream()));
-        return apiResponse;
+        return IOUtils.toString(new InputStreamReader(url.openStream()));
     }
 
     /**
@@ -79,8 +77,11 @@ public class Main {
             throw new IllegalArgumentException("-DjobUrl parameter cannot be empty. Please, provide a valid URL!");
         }
         System.out.println("Parameter jobUrl=" + jobUrl);
-        Integer threadsCount = System.getProperty("threadsCount") == null ? 15 : Integer.parseInt(System.getProperty("threadsCount"));
-        System.out.println("Parameter threadsCount=" + threadsCount);
+        String newUrlPrefix = System.getProperty("newUrlPrefix");
+        newUrlPrefix = newUrlPrefix == null ? "" : newUrlPrefix;
+        System.out.println("Parameter jobUrl=" + newUrlPrefix);
+        Integer threadPoolSize = System.getProperty("threadPoolSize") == null ? 15 : Integer.parseInt(System.getProperty("threadsCount"));
+        System.out.println("Parameter threadPoolSize=" + threadPoolSize);
         Set<Integer> builds = parseBuilds(System.getProperty("builds"));
         // in case there is no build number specified, search in the last job build artifacts
         Integer lastBuildsCount = builds.size() == 0 ? 1 : 0;
@@ -92,9 +93,9 @@ public class Main {
         String lastNBuildNumbersJsonPath = "$.builds[:" + lastBuildsCount + "].number";
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
-        String apiJobUrl = jobUrl + "/api/json";
+        String apiJobUrl = jobUrl.replace(jobUrl, newUrlPrefix) + "/api/json";
         String jobResponse = getUrlResponse(apiJobUrl);
-        List<Integer> lastNBuilds = null;
+        List<Integer> lastNBuilds;
         try {
             lastNBuilds = JsonPath.read(jobResponse, lastNBuildNumbersJsonPath);
         } catch (IllegalArgumentException e) {
@@ -109,18 +110,20 @@ public class Main {
 
         System.out.println("Print the nodes matching the searched text \"" + searchedText + "\" in artifacts: ");
         List<JSONObject> buildsJsons = JsonPath.read(jobResponse, buildNumbersJsonPath, buildsFilter);
-        ExecutorService executorService = Executors.newFixedThreadPool( threadsCount );
+        ExecutorService executorService = Executors.newFixedThreadPool( threadPoolSize );
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = 0;
         for (JSONObject buildJson : buildsJsons) {
             Integer buildNumber = JsonPath.read(buildJson, buildNumberJsonPath);
             String buildUrl = JsonPath.read(buildJson, urlJsonPath);
-            String buildApiResp = getUrlResponse(buildUrl + "/api/json");
+            String buildApiResp = getUrlResponse(buildUrl.replace(jobUrl, newUrlPrefix) + "/api/json");
             List<String> nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
 
             for (String nodeUrl : nodesUrls) {
                 completionService.submit( new JenkinsNodeArtifactsFilter(
+                        jobUrl,
+                        newUrlPrefix,
                         buildNumber,
                         nodeUrl,
                         artifactsFilters,
