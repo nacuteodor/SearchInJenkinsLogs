@@ -18,3 +18,9 @@ java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-
 Easy to integrate the project with Intellij, JDK 8
 
 ## Please, give a star to this project if it helps you.
+
+## Contact
+[Profile](http://nacuteodor.wix.com/profile)
+
+## Related projects:
+https://github.com/nacuteodor/ProcessTestSummaries
