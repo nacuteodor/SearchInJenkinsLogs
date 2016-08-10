@@ -78,8 +78,8 @@ public class Main {
         }
         System.out.println("Parameter jobUrl=" + jobUrl);
         String newUrlPrefix = System.getProperty("newUrlPrefix");
-        newUrlPrefix = newUrlPrefix == null ? "" : newUrlPrefix;
-        System.out.println("Parameter jobUrl=" + newUrlPrefix);
+        System.out.println("Parameter newUrlPrefix=" + newUrlPrefix);
+        newUrlPrefix = newUrlPrefix == null ? jobUrl : newUrlPrefix;
         Integer threadPoolSize = System.getProperty("threadPoolSize") == null ? 15 : Integer.parseInt(System.getProperty("threadsCount"));
         System.out.println("Parameter threadPoolSize=" + threadPoolSize);
         Set<Integer> builds = parseBuilds(System.getProperty("builds"));
