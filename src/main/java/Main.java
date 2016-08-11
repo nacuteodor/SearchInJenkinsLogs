@@ -15,7 +15,7 @@ import java.util.concurrent.*;
  * Created by Teo on 7/30/2016.
  * A tool to be run for a Jenkins job to search a text with regular expressions in build artifacts.
  * Command line e.g:
- *     java -DjobUrl="$jobUrl" -DthreadsCount=20 -Dbuilds="112,114-116,118" -DlastBuildsCount=2 -DartifactsFilters=".*outputFile.*" -DsearchedText=".*textToFind.*" -cp searchinjenkinslogs.jar Main
+ *     java -DjobUrl="$jobUrl" -DnewUrlPrefix="$newUrlPrefix=" -DthreadPoolSize=20 -Dbuilds="112,114-116,118" -DlastBuildsCount=2 -DartifactsFilters=".*outputFile.*" -DsearchedText=".*textToFind.*" -cp searchinjenkinslogs.jar Main
  */
 public class Main {
 
@@ -80,7 +80,7 @@ public class Main {
         String newUrlPrefix = System.getProperty("newUrlPrefix");
         System.out.println("Parameter newUrlPrefix=" + newUrlPrefix);
         newUrlPrefix = newUrlPrefix == null ? jobUrl : newUrlPrefix;
-        Integer threadPoolSize = System.getProperty("threadPoolSize") == null ? 15 : Integer.parseInt(System.getProperty("threadsCount"));
+        Integer threadPoolSize = System.getProperty("threadPoolSize") == null ? 15 : Integer.parseInt(System.getProperty("threadPoolSize"));
         System.out.println("Parameter threadPoolSize=" + threadPoolSize);
         Set<Integer> builds = parseBuilds(System.getProperty("builds"));
         // in case there is no build number specified, search in the last job build artifacts
