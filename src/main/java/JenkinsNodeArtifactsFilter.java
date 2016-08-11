@@ -43,7 +43,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
         try {
             processNode();
         } catch( IOException e ) {
-            String errorLog = "Exception when extracting S3 shard filtered data to local file: ";
+            String errorLog = "Exception when when processing node: build: " + buildNumber + " node: " + nodeUrl;
             System.err.println( errorLog + e.getLocalizedMessage() );
             throw new RuntimeException( errorLog, e );
         }
@@ -57,11 +57,12 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
     private void processNode() throws IOException {
         String nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(jobUrl, newUrlPrefix) + "/api/json");
         List<String> artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
+        String artifactUrlPrefix = newUrlPrefix + "/" + buildNumber + "/" + nodeUrl.replace(jobUrl, "").replace(buildNumber + "/", "") + "/artifact/";
         for (String artifactRelativePath : artifactsRelativePaths) {
             if (!Main.artifactUrlMatchesFilters(artifactRelativePath, artifactsFilters)) {
                 return;
             }
-            String artifactUrl = nodeUrl + artifactRelativePath;
+            String artifactUrl =  artifactUrlPrefix + artifactRelativePath;
             String artifactFileContent = Main.getUrlResponse(artifactUrl);
             // replaces end of line chars with empty to be able to match all file contain with regular expression
             if (searchedText.isEmpty() || artifactFileContent.replaceAll("\\r\\n", "").replaceAll("\\n", "").matches(searchedText)) {

@@ -12,8 +12,8 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="lib" level="project" />
+    <orderEntry type="library" name="commons-io:commons-io:2.51" level="project" />
+    <orderEntry type="library" name="org.apache.commons:commons-collections4:4.11" level="project" />
     <orderEntry type="library" name="com.jayway.jsonpath:json-path:0.8.1" level="project" />
-    <orderEntry type="library" name="commons-io:commons-io:2.5" level="project" />
-    <orderEntry type="library" name="org.apache.commons:commons-collections4:4.1" level="project" />
   </component>
 </module>
