@@ -158,7 +158,7 @@ public class Main {
         String lastBuild = "";
         String lastNode = "";
 
-        System.out.println("-> Found the searched text in " + buildNodesArtifacts.size() + " build nodes.");
+        System.out.println("-> Found the searched text in " + buildNodesArtifacts.keySet().size() + " build nodes.");
         for ( Map.Entry<String, String> buildNodeArtifact : buildNodesArtifactsList) {
             String[] buildNodeTokens = buildNodeArtifact.getKey().split(KEYS_SEPARATOR);
             String currentBuild = buildNodeTokens[0];
