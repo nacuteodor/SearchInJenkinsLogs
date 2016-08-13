@@ -60,7 +60,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
         String artifactUrlPrefix = newUrlPrefix + "/" + buildNumber + "/" + nodeUrl.replace(jobUrl, "").replace(buildNumber + "/", "") + "/artifact/";
         for (String artifactRelativePath : artifactsRelativePaths) {
             if (!Main.artifactUrlMatchesFilters(artifactRelativePath, artifactsFilters)) {
-                return;
+                continue;
             }
             String artifactUrl =  artifactUrlPrefix + artifactRelativePath;
             String artifactFileContent = Main.getUrlResponse(artifactUrl);
