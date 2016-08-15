@@ -222,7 +222,7 @@ public class Main {
                 Criteria.where(buildNumberJsonPath).in(builds)
         );
 
-        System.out.println("Print the nodes matching the searched text \"" + searchedText + "\" in artifacts: ");
+        System.out.println("\nPrint the nodes matching the searched text \"" + searchedText + "\" in artifacts: ");
         List<JSONObject> buildsJsons = JsonPath.read(jobResponse, buildNumbersJsonPath, buildsFilter);
         ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
@@ -289,7 +289,7 @@ public class Main {
             String currentNode = buildNodeTokens[1];
             if (!currentBuild.equals(lastBuild)) {
                 lastBuild = currentBuild;
-                System.out.println("Build: " + currentBuild);
+                System.out.println("\nBuild: " + currentBuild);
             }
             if (!currentNode.equals(lastNode)) {
                 lastNode = currentNode;
@@ -307,7 +307,7 @@ public class Main {
         }
 
         // ======== PRINT THE COMMON FAILURES ========
-        System.out.println("Group common failures from tests reports: ");
+        System.out.println("\nGroup common failures from tests reports: ");
         ArrayListValuedHashMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
         for (Map.Entry<String, TestFailure> buildNodeFailure : buildNodesFailures.entries()) {
             String failureKey = String.valueOf(buildNodeFailure.getValue().failureToDisplay).concat(KEYS_SEPARATOR).concat(buildNodeFailure.getKey());
@@ -352,7 +352,7 @@ public class Main {
             if (!currentKey.equals(lastKey)) {
                 lastKey = currentKey;
                 lastBuild = "";
-                System.out.println("\tFailure: " + buildFailure.getValue().failureToDisplay + " Test e.g.: " + buildFailure.getValue().testUrl);
+                System.out.println("\n\tFailure: " + buildFailure.getValue().failureToDisplay + " Test e.g.: " + buildFailure.getValue().testUrl);
                 System.out.println("\t-> Found " + groupedBuildFailures.get(currentKey).size() + " failures.");
             }
             if (!currentBuild.equals(lastBuild)) {
