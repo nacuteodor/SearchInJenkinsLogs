@@ -168,7 +168,7 @@ public class Main {
                     if (groupTestsFailures) {
                         String stacktrace = failureElement.getTextContent();
                         String failureToCompare = stacktrace + ": " + message.split("\\n")[0];
-                        testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, nodeUrl + "testReport/junit/" + testUrl, failureToCompare, failureToCompare.length() >= 150 ? failureToCompare.substring(0, 150) : failureToCompare + " ..."));
+                        testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, nodeUrl + "testReport/junit/" + testUrl, failureToCompare, (failureToCompare.length() >= 150 ? failureToCompare.substring(0, 150) : failureToCompare) + " ..."));
                     }
                 }
             }
