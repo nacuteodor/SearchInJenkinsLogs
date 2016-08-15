@@ -333,10 +333,11 @@ public class Main {
 
         // add failure tests count to be able to sort in the most frequent failures
         ArrayListValuedHashMap<String, TestFailure> groupedBuildFailures = new ArrayListValuedHashMap<>();
+        String failuresCountFormat = "%0" + String.valueOf(groupedBuildNodesFailures.size()).length() + "d";
         for (String key : groupedBuildNodesFailures.keySet()) {
             List<TestFailure> values = groupedBuildNodesFailures.get(key);
             values.sort((o1, o2) -> o1.testUrl.compareTo(o2.testUrl));
-            groupedBuildFailures.putAll(String.valueOf(values.size()).concat(KEYS_SEPARATOR).concat(key), values);
+            groupedBuildFailures.putAll(String.format(failuresCountFormat, values.size()).concat(KEYS_SEPARATOR).concat(key), values);
         }
         System.out.println("-> Found " + groupedBuildFailures.keySet().size() + " common failures.");
 
