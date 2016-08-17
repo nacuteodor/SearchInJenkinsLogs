@@ -262,7 +262,7 @@ public class Main {
                 }
                 if (completedProcess.testsFailures.size() > 0) {
                     for (Map.Entry<String, TestFailure> entry : completedProcess.testsFailures.entries()) {
-                        buildNodesFailures.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(entry.getKey()), entry.getValue());
+                        buildNodesFailures.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(entry.getKey()).concat(entry.getValue().failureToDisplay), entry.getValue());
                     }
                 }
             } catch (InterruptedException e) {
@@ -310,7 +310,7 @@ public class Main {
         System.out.println("\nGroup common failures from tests reports: ");
         ArrayListValuedHashMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
         for (Map.Entry<String, TestFailure> buildNodeFailure : buildNodesFailures.entries()) {
-            String failureKey = String.valueOf(buildNodeFailure.getValue().failureToDisplay).concat(KEYS_SEPARATOR).concat(buildNodeFailure.getKey());
+            String failureKey = buildNodeFailure.getKey();
             String groupedBuildNodeFailureKey = null;
             for (Map.Entry<String, TestFailure> groupedBuildNodeFailure : groupedBuildNodesFailures.entries()) {
                 Integer maxDistance = Math.min(buildNodeFailure.getValue().failureToCompare.length(), groupedBuildNodeFailure.getValue().failureToCompare.length());
