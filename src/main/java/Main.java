@@ -325,7 +325,7 @@ public class Main {
                 System.out.println("\tNode: " + currentNode);
             }
             if (searchInJUnitReports) {
-                System.out.println("\t\tFailed test report: " + currentNode + "testReport/junit/" + buildNodeArtifact.getValue());
+                System.out.println("\t\tFailed test report: " + buildTestReportLink(currentNode, buildNodeArtifact.getValue()));
             } else {
                 System.out.println("\t\tArtifact relative path: " + buildNodeArtifact.getValue());
             }
