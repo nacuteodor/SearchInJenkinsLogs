@@ -4,7 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import net.minidev.json.JSONObject;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -92,8 +92,7 @@ public class Main {
      * @param xml the xml as String, we need to transform
      * @return a new xml
      */
-    private static String encodeNewLineCharInFailureElement(String xml) {
-        String failureTag = "<failure message=";
+    private static String encodeNewLineCharInFailureElement(String xml, String failureTag, String failureEndTag) {
         String newXml = "";
         boolean replace = false;
         while (!xml.isEmpty()) {
@@ -103,7 +102,7 @@ public class Main {
                 break;
             }
             String newLine = xml.substring(0, newLinePosition);
-            if (!newLine.contains("</failure>")) {
+            if (!newLine.contains(failureEndTag)) {
                 if (newLine.contains(failureTag)) {
                     newLine += "&#10;";
                     replace = true;
@@ -122,10 +121,52 @@ public class Main {
         return newXml;
     }
 
+    private static String encodeNewLineCharInFailureElements(String xml) {
+        String newXml = encodeNewLineCharInFailureElement(xml, "<failure message=", "</failure>");
+        newXml = encodeNewLineCharInFailureElement(newXml, "<error message=", "</error>");
+        return newXml;
+    }
+
+    private static String buildTestReportLink(String node, String test) {
+        return node + "testReport/junit/" + test;
+    }
+
+    /**
+     * Matches the @searchedText in each test failure for a test and return a list with the Jenkins links to the failed tests reports
+     *
+     * @param failureNodes the xml failure/error nodes for a test case element
+     * @param testUrl the test url
+     * @param buildNumber build number
+     * @param nodeUrl node URL
+     * @param searchInJUnitReports true if we search a regular expression in failure messages
+     * @param groupTestsFailures true if it groups failures based on stacktrace and failure message
+     * @param searchedText the regular expression to match with the failure message
+     * @return a list with the Jenkins links to the failed tests reports
+     * @return
+     */
+   private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String buildNumber, String nodeUrl, boolean searchInJUnitReports, boolean groupTestsFailures, String searchedText) {
+       List<String> matchedFailedTests = new ArrayList<>();
+       ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
+       for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
+           Element failureElement = (Element) failureNodes.item(failureNodeIndex);
+           String message = failureElement.getAttribute("message");
+           if (searchInJUnitReports && Main.findSearchedTextInContent(searchedText, message)) {
+               matchedFailedTests.add(testUrl);
+           }
+           if (groupTestsFailures) {
+               String stacktrace = failureElement.getTextContent();
+               String failureToCompare = stacktrace + ": " + message.split("\\n")[0];
+               testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), failureToCompare, failureToCompare.length() >= 150 ? failureToCompare.substring(0, 150) : failureToCompare + " ..."));
+           }
+       }
+       return new FailuresMatchResult(matchedFailedTests, testsFailures);
+    }
+
     /**
      * Matches the @searchedText in each test failure and return a list with the Jenkins links to the failed tests reports
      *
      * @param jUnitReportXml the JUnit xml report as a String
+     * @param buildNumber build number
      * @param nodeUrl node URL
      * @param searchInJUnitReports true if we search a regular expression in failure messages
      * @param groupTestsFailures true if it groups failures based on stacktrace and failure message
@@ -142,7 +183,7 @@ public class Main {
         DocumentBuilderFactory dbFactory
                 = DocumentBuilderFactory.newInstance();
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-        jUnitReportXml = encodeNewLineCharInFailureElement(jUnitReportXml);
+        jUnitReportXml = encodeNewLineCharInFailureElements(jUnitReportXml);
         Document doc = dBuilder.parse(new ByteArrayInputStream(jUnitReportXml.getBytes()));
         doc.getDocumentElement().normalize();
         NodeList testCasesList = doc.getElementsByTagName("testcase");
@@ -150,27 +191,15 @@ public class Main {
             Node testCaseNode = testCasesList.item(testCaseIndex);
             if (testCaseNode.getNodeType() == Node.ELEMENT_NODE) {
                 Element testCaseElement = (Element) testCaseNode;
-                String testCaseName = testCaseElement.getAttribute("classname") + "." + testCaseElement.getAttribute("name");
-//                NodeList outputNodes = testCaseElement.getElementsByTagName("system-out");
-//                String output = "";
-//                for (int outputNodeIndex = 0; outputNodeIndex < outputNodes.getLength(); outputNodeIndex++) {
-//                    Element outputElement = (Element) outputNodes.item(outputNodeIndex);
-//                    output += outputElement.getTextContent();
-//                }
+                String testUrl = testCaseElement.getAttribute("classname").replace(".", "/") + "/" + testCaseElement.getAttribute("name").replaceAll("[.\\\\()\\[\\]/-]", "_");
                 NodeList failureNodes = testCaseElement.getElementsByTagName("failure");
-                for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
-                    Element failureElement = (Element) failureNodes.item(failureNodeIndex);
-                    String message = failureElement.getAttribute("message");
-                    String testUrl = testCaseName.replace(".", "/");
-                    if (searchInJUnitReports && Main.findSearchedTextInContent(searchedText, message)) {
-                        matchedFailedTests.add(testUrl);
-                    }
-                    if (groupTestsFailures) {
-                        String stacktrace = failureElement.getTextContent();
-                        String failureToCompare = stacktrace + ": " + message.split("\\n")[0];
-                        testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, nodeUrl + "testReport/junit/" + testUrl, failureToCompare, (failureToCompare.length() >= 150 ? failureToCompare.substring(0, 150) : failureToCompare) + " ..."));
-                    }
-                }
+                FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, buildNumber, nodeUrl, searchInJUnitReports, groupTestsFailures, searchedText);
+                matchedFailedTests.addAll(failuresMatchResult.matchedFailedTests);
+                testsFailures.putAll(failuresMatchResult.testsFailures);
+                NodeList errorNodes = testCaseElement.getElementsByTagName("error");
+                FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, buildNumber, nodeUrl, searchInJUnitReports, groupTestsFailures, searchedText);
+                matchedFailedTests.addAll(errorsMatchResult.matchedFailedTests);
+                testsFailures.putAll(errorsMatchResult.testsFailures);
             }
         }
         return new FailuresMatchResult(matchedFailedTests, testsFailures);
@@ -318,7 +347,8 @@ public class Main {
                     groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
                     break;
                 }
-                double currentThreshold = (double) StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare) * 100 / maxDistance;
+                Integer distanceThreshold = diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * diffThreshold) / 100);
+                double currentThreshold = (double) StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, distanceThreshold) * 100 / maxDistance;
                 if (currentThreshold <= diffThreshold) {
                     groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
                     break;
