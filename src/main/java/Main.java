@@ -347,8 +347,10 @@ public class Main {
                     groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
                     break;
                 }
-                Integer distanceThreshold = diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * diffThreshold) / 100);
-                double currentThreshold = (double) StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, distanceThreshold) * 100 / maxDistance;
+                int distanceThreshold = diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * diffThreshold) / 100);
+                double currentThreshold = (double) org.apache.commons.lang3.StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, distanceThreshold);
+                currentThreshold = currentThreshold == -1 ? maxDistance : currentThreshold;
+                currentThreshold = currentThreshold * 100 / maxDistance;
                 if (currentThreshold <= diffThreshold) {
                     groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
                     break;
