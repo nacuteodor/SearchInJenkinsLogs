@@ -156,7 +156,7 @@ public class Main {
            if (groupTestsFailures) {
                String stacktrace = failureElement.getTextContent();
                String failureToCompare = stacktrace + ": " + message.split("\\n")[0];
-               testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), failureToCompare, failureToCompare.length() >= 150 ? failureToCompare.substring(0, 150) + " ..." : failureToCompare));
+               testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
            }
        }
        return new FailuresMatchResult(matchedFailedTests, testsFailures);
@@ -384,7 +384,7 @@ public class Main {
             if (!currentKey.equals(lastKey)) {
                 lastKey = currentKey;
                 lastBuild = "";
-                System.out.println("\n\tFailure: " + buildFailure.getValue().failureToDisplay + " Test e.g.: " + buildFailure.getValue().testUrl);
+                System.out.println("\n\tFailure: " + buildFailure.getValue().failureToDisplay);
                 System.out.println("\t-> Found " + groupedBuildFailures.get(currentKey).size() + " failures.");
             }
             if (!currentBuild.equals(lastBuild)) {
