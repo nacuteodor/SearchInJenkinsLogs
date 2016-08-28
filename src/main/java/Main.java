@@ -142,7 +142,6 @@ public class Main {
      * @param groupTestsFailures true if it groups failures based on stacktrace and failure message
      * @param searchedText the regular expression to match with the failure message
      * @return a list with the Jenkins links to the failed tests reports
-     * @return
      */
    private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String buildNumber, String nodeUrl, boolean searchInJUnitReports, boolean groupTestsFailures, String searchedText) {
        List<String> matchedFailedTests = new ArrayList<>();
@@ -208,29 +207,30 @@ public class Main {
     public static void main(String[] args) throws IOException {
         // ======== GET AND PARSE THE ARGUMENTS VALUES ========
         String jobUrl = System.getProperty("jobUrl");
-        if (jobUrl == null || jobUrl.isEmpty()) {
+        if (StringUtils.isEmpty(jobUrl)) {
             throw new IllegalArgumentException("-DjobUrl parameter cannot be empty. Please, provide a valid URL!");
         }
         System.out.println("Parameter jobUrl=" + jobUrl);
         String newUrlPrefix = System.getProperty("newUrlPrefix");
         System.out.println("Parameter newUrlPrefix=" + newUrlPrefix);
-        newUrlPrefix = newUrlPrefix == null ? jobUrl : newUrlPrefix;
-        Boolean searchInJUnitReports = System.getProperty("searchInJUnitReports") == null ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
+        newUrlPrefix = StringUtils.isEmpty(newUrlPrefix) ? jobUrl : newUrlPrefix;
+        Boolean searchInJUnitReports = StringUtils.isEmpty(System.getProperty("searchInJUnitReports")) ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
         System.out.println("Parameter searchInJUnitReports=" + searchInJUnitReports);
-        Integer threadPoolSize = System.getProperty("threadPoolSize") == null ? 15 : Integer.parseInt(System.getProperty("threadPoolSize"));
+        String threadPoolSizeString = System.getProperty("threadPoolSize");
+        Integer threadPoolSize = StringUtils.isEmpty(System.getProperty("threadPoolSize")) ? 0 : Integer.parseInt(threadPoolSizeString);
         System.out.println("Parameter threadPoolSize=" + threadPoolSize);
         Set<Integer> builds = parseBuilds(System.getProperty("builds"));
         // in case there is no build number specified, search in the last job build artifacts
         Integer lastBuildsCount = builds.size() == 0 ? 1 : 0;
-        lastBuildsCount = System.getProperty("lastBuildsCount") == null ? lastBuildsCount : Integer.parseInt(System.getProperty("lastBuildsCount"));
+        lastBuildsCount = StringUtils.isEmpty(System.getProperty("lastBuildsCount")) ? lastBuildsCount : Integer.parseInt(System.getProperty("lastBuildsCount"));
         System.out.println("Parameter lastBuildsCount=" + lastBuildsCount);
         String artifactsFilters = System.getProperty("artifactsFilters") == null ? "" : System.getProperty("artifactsFilters");
         String searchedText = System.getProperty("searchedText") == null ? "" : System.getProperty("searchedText");
         System.out.println("Parameter searchedText=" + searchedText);
-        Boolean groupTestsFailures = System.getProperty("groupTestsFailures") == null ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
+        Boolean groupTestsFailures = StringUtils.isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
         System.out.println("Parameter groupTestsFailures=" + groupTestsFailures);
         // the maximum difference threshold as a percentage of difference distance between 2 failures and the maximum possible distance for the shorter failure
-        double diffThreshold = System.getProperty("diffThreshold") == null ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
+        double diffThreshold = StringUtils.isEmpty(System.getProperty("diffThreshold")) ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
         System.out.println("Parameter diffThreshold=" + diffThreshold);
 
         final String lastNBuildNumbersJsonPath = "$.builds[:" + lastBuildsCount + "].number";
@@ -253,7 +253,12 @@ public class Main {
 
         System.out.println("\nPrint the nodes matching the searched text \"" + searchedText + "\" in artifacts: ");
         List<JSONObject> buildsJsons = JsonPath.read(jobResponse, buildNumbersJsonPath, buildsFilter);
-        ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
+        ExecutorService executorService;
+        if (threadPoolSize <= 0) {
+            executorService = Executors.newWorkStealingPool();
+        } else {
+            executorService = Executors.newFixedThreadPool(threadPoolSize);
+        }
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = 0;
@@ -305,14 +310,14 @@ public class Main {
         executorService.shutdown();
 
         // ======== PRINT THE NODES/TESTS MATCHING THE SEARCHED TEXT ========
-        List<Map.Entry<String, String>> buildNodesArtifactsList = new ArrayList<>(buildNodesArtifacts.entries());
         // sort the results in ascending buildNumber_nodeUrl order
-        buildNodesArtifactsList.sort((o1, o2) -> o1.getKey().compareTo(o2.getKey()));
+        Map.Entry<String, String>[] buildNodesArtifactsArray = buildNodesArtifacts.entries().toArray(new Map.Entry[0]);
+        Arrays.parallelSort(buildNodesArtifactsArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
         String lastBuild = "";
         String lastNode = "";
 
         System.out.println("-> Found the searched text in " + buildNodesArtifacts.keySet().size() + " build nodes.");
-        for (Map.Entry<String, String> buildNodeArtifact : buildNodesArtifactsList) {
+        for (Map.Entry<String, String> buildNodeArtifact : buildNodesArtifactsArray) {
             String[] buildNodeTokens = buildNodeArtifact.getKey().split(KEYS_SEPARATOR);
             String currentBuild = buildNodeTokens[0];
             String currentNode = buildNodeTokens[1];
@@ -348,7 +353,7 @@ public class Main {
                     break;
                 }
                 int distanceThreshold = diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * diffThreshold) / 100);
-                double currentThreshold = (double) org.apache.commons.lang3.StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, distanceThreshold);
+                double currentThreshold = (double) StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, distanceThreshold);
                 currentThreshold = currentThreshold == -1 ? maxDistance : currentThreshold;
                 currentThreshold = currentThreshold * 100 / maxDistance;
                 if (currentThreshold <= diffThreshold) {
@@ -368,17 +373,18 @@ public class Main {
         String failuresCountFormat = "%0" + String.valueOf(groupedBuildNodesFailures.size()).length() + "d";
         for (String key : groupedBuildNodesFailures.keySet()) {
             List<TestFailure> values = groupedBuildNodesFailures.get(key);
-            values.sort((o1, o2) -> o1.testUrl.compareTo(o2.testUrl));
-            groupedBuildFailures.putAll(String.format(failuresCountFormat, values.size()).concat(KEYS_SEPARATOR).concat(key), values);
+            TestFailure[] valuesArray = values.toArray(new TestFailure[0]);
+            Arrays.parallelSort(valuesArray, (o1, o2) -> o1.testUrl.compareTo(o2.testUrl));
+            groupedBuildFailures.putAll(String.format(failuresCountFormat, values.size()).concat(KEYS_SEPARATOR).concat(key), Arrays.asList(valuesArray));
         }
         System.out.println("-> Found " + groupedBuildFailures.keySet().size() + " common failures.");
 
         // sort the results by count#failure#firstTestUrl#buildNumber ascending order
-        List<Map.Entry<String, TestFailure>> groupedBuildFailuresList = new ArrayList<>(groupedBuildFailures.entries());
-        groupedBuildFailuresList.sort((o1, o2) -> o1.getKey().compareTo(o2.getKey()));
+        Map.Entry<String, TestFailure>[] groupedBuildFailuresArray = groupedBuildFailures.entries().toArray(new Map.Entry[0]);
+        Arrays.parallelSort(groupedBuildFailuresArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
         String lastKey = "";
         lastBuild = "";
-        for (Map.Entry<String, TestFailure> buildFailure : groupedBuildFailuresList) {
+        for (Map.Entry<String, TestFailure> buildFailure : groupedBuildFailuresArray) {
             String currentKey = buildFailure.getKey();
             String currentBuild = buildFailure.getValue().buildNumber;
             if (!currentKey.equals(lastKey)) {
