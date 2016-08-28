@@ -2,6 +2,7 @@ import com.jayway.jsonpath.Criteria;
 import com.jayway.jsonpath.Filter;
 import com.jayway.jsonpath.JsonPath;
 import net.minidev.json.JSONObject;
+import org.apache.commons.collections4.map.HashedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -98,24 +99,24 @@ public class Main {
         while (!xml.isEmpty()) {
             int newLinePosition = xml.indexOf("\n");
             if (newLinePosition == -1) {
-                newXml += xml;
+                newXml = newXml.concat(xml);
                 break;
             }
             String newLine = xml.substring(0, newLinePosition);
             if (!newLine.contains(failureEndTag)) {
                 if (newLine.contains(failureTag)) {
-                    newLine += "&#10;";
+                    newLine = newLine.concat("&#10;");
                     replace = true;
                 } else if (replace) {
-                    newLine += "&#10;";
+                    newLine = newLine.concat("&#10;");
                 } else {
-                    newLine += "\n";
+                    newLine = newLine.concat("\n");
                 }
             } else {
                 replace = false;
-                newLine += "\n";
+                newLine = newLine.concat("\n");
             }
-            newXml += newLine;
+            newXml = newXml.concat(newLine);
             xml = xml.substring(newLinePosition + 1);
         }
         return newXml;
@@ -128,7 +129,7 @@ public class Main {
     }
 
     private static String buildTestReportLink(String node, String test) {
-        return node + "testReport/junit/" + test;
+        return node.concat("testReport/junit/").concat(test);
     }
 
     /**
@@ -154,7 +155,7 @@ public class Main {
            }
            if (groupTestsFailures) {
                String stacktrace = failureElement.getTextContent();
-               String failureToCompare = stacktrace + ": " + message.split("\\n")[0];
+               String failureToCompare = stacktrace.concat(": ").concat(message.split("\\n")[0]);
                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
            }
        }
@@ -178,6 +179,7 @@ public class Main {
     static FailuresMatchResult matchJUnitReportFailures(String jUnitReportXml, String buildNumber, String nodeUrl,
                                                         boolean searchInJUnitReports, boolean groupTestsFailures, String searchedText) throws ParserConfigurationException, IOException, SAXException {
         List<String> matchedFailedTests = new ArrayList<>();
+        Map<String, Integer> testsCount = new HashedMap<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
         DocumentBuilderFactory dbFactory
                 = DocumentBuilderFactory.newInstance();
@@ -190,7 +192,11 @@ public class Main {
             Node testCaseNode = testCasesList.item(testCaseIndex);
             if (testCaseNode.getNodeType() == Node.ELEMENT_NODE) {
                 Element testCaseElement = (Element) testCaseNode;
-                String testUrl = testCaseElement.getAttribute("classname").replace(".", "/") + "/" + testCaseElement.getAttribute("name").replaceAll("[.\\\\()\\[\\]/-]", "_");
+                String testUrl = testCaseElement.getAttribute("classname").replace(".", "/").concat("/").concat(testCaseElement.getAttribute("name").replaceAll("[.\\\\()\\[\\]/-]", "_"));
+                Integer testCount = testsCount.get(testUrl);
+                testCount = testCount == null ? 0 : testCount;
+                testsCount.put(testUrl, ++testCount);
+                testUrl = testCount < 2 ? testUrl : testUrl.concat("_").concat(String.valueOf(testCount));
                 NodeList failureNodes = testCaseElement.getElementsByTagName("failure");
                 FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, buildNumber, nodeUrl, searchInJUnitReports, groupTestsFailures, searchedText);
                 matchedFailedTests.addAll(failuresMatchResult.matchedFailedTests);
@@ -316,23 +322,23 @@ public class Main {
         String lastBuild = "";
         String lastNode = "";
 
-        System.out.println("-> Found the searched text in " + buildNodesArtifacts.keySet().size() + " build nodes.");
+        System.out.println("-> Found the searched text in ".concat(String.valueOf(buildNodesArtifacts.keySet().size())).concat(" build nodes."));
         for (Map.Entry<String, String> buildNodeArtifact : buildNodesArtifactsArray) {
             String[] buildNodeTokens = buildNodeArtifact.getKey().split(KEYS_SEPARATOR);
             String currentBuild = buildNodeTokens[0];
             String currentNode = buildNodeTokens[1];
             if (!currentBuild.equals(lastBuild)) {
                 lastBuild = currentBuild;
-                System.out.println("\nBuild: " + currentBuild);
+                System.out.println("\nBuild: ".concat(currentBuild));
             }
             if (!currentNode.equals(lastNode)) {
                 lastNode = currentNode;
-                System.out.println("\tNode: " + currentNode);
+                System.out.println("\tNode: ".concat(currentNode));
             }
             if (searchInJUnitReports) {
-                System.out.println("\t\tFailed test report: " + buildTestReportLink(currentNode, buildNodeArtifact.getValue()));
+                System.out.println("\t\tFailed test report: ".concat(buildTestReportLink(currentNode, buildNodeArtifact.getValue())));
             } else {
-                System.out.println("\t\tArtifact relative path: " + buildNodeArtifact.getValue());
+                System.out.println("\t\tArtifact relative path: ".concat(buildNodeArtifact.getValue()));
             }
         }
 
@@ -370,14 +376,14 @@ public class Main {
 
         // add failure tests count to be able to sort in the most frequent failures
         ArrayListValuedHashMap<String, TestFailure> groupedBuildFailures = new ArrayListValuedHashMap<>();
-        String failuresCountFormat = "%0" + String.valueOf(groupedBuildNodesFailures.size()).length() + "d";
+        String failuresCountFormat = "%0".concat(String.valueOf(String.valueOf(groupedBuildNodesFailures.size()).length())).concat("d");
         for (String key : groupedBuildNodesFailures.keySet()) {
             List<TestFailure> values = groupedBuildNodesFailures.get(key);
             TestFailure[] valuesArray = values.toArray(new TestFailure[0]);
             Arrays.parallelSort(valuesArray, (o1, o2) -> o1.testUrl.compareTo(o2.testUrl));
             groupedBuildFailures.putAll(String.format(failuresCountFormat, values.size()).concat(KEYS_SEPARATOR).concat(key), Arrays.asList(valuesArray));
         }
-        System.out.println("-> Found " + groupedBuildFailures.keySet().size() + " common failures.");
+        System.out.println("-> Found ".concat(String.valueOf(groupedBuildFailures.keySet().size())).concat(" common failures."));
 
         // sort the results by count#failure#firstTestUrl#buildNumber ascending order
         Map.Entry<String, TestFailure>[] groupedBuildFailuresArray = groupedBuildFailures.entries().toArray(new Map.Entry[0]);
@@ -390,14 +396,14 @@ public class Main {
             if (!currentKey.equals(lastKey)) {
                 lastKey = currentKey;
                 lastBuild = "";
-                System.out.println("\n\tFailure: " + buildFailure.getValue().failureToDisplay);
-                System.out.println("\t-> Found " + groupedBuildFailures.get(currentKey).size() + " failures.");
+                System.out.println("\n\tFailure: ".concat(buildFailure.getValue().failureToDisplay));
+                System.out.println("\t-> Found ".concat(String.valueOf(groupedBuildFailures.get(currentKey).size())).concat(" failures."));
             }
             if (!currentBuild.equals(lastBuild)) {
                 lastBuild = currentBuild;
                 System.out.println("\t\tBuild: " + currentBuild);
             }
-            System.out.println("\t\t\tFailed test report: " + buildFailure.getValue().testUrl + " " + buildFailure.getValue().failureToDisplay);
+            System.out.println("\t\t\tFailed test report: ".concat(buildFailure.getValue().testUrl));
         }
     }
 }

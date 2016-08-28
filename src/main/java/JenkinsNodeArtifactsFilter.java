@@ -66,9 +66,9 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
      * Saves the artifacts where it finds the @searchedText in matchedArtifacts list
      */
     private void processNode() throws IOException, ParserConfigurationException, SAXException {
-        String nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(jobUrl, newUrlPrefix) + "/api/json");
+        String nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(jobUrl, newUrlPrefix).concat("/api/json"));
         List<String> artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
-        String artifactUrlPrefix = newUrlPrefix + "/" + buildNumber + "/" + nodeUrl.replace(jobUrl, "").replace(buildNumber + "/", "") + "/artifact/";
+        String artifactUrlPrefix = newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(nodeUrl.replace(jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
         for (String artifactRelativePath : artifactsRelativePaths) {
             if (!Main.artifactUrlMatchesFilters(artifactRelativePath, artifactsFilters)) {
                 continue;
