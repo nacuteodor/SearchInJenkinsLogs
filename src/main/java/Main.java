@@ -397,7 +397,7 @@ public class Main {
                 lastBuild = currentBuild;
                 System.out.println("\t\tBuild: " + currentBuild);
             }
-            System.out.println("\t\t\tFailed test report: " + buildFailure.getValue().testUrl);
+            System.out.println("\t\t\tFailed test report: " + buildFailure.getValue().failureToDisplay);
         }
     }
 }
