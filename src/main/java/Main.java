@@ -290,7 +290,6 @@ public class Main {
         System.out.println("Parameter searchedText=" + toolArgs.searchedText);
         toolArgs.groupTestsFailures = StringUtils.isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
         System.out.println("Parameter groupTestsFailures=" + toolArgs.groupTestsFailures);
-        toolArgs.groupTestsFailures = true;
         // the maximum difference threshold as a percentage of difference distance between 2 failures and the maximum possible distance for the shorter failure
         toolArgs.diffThreshold = StringUtils.isEmpty(System.getProperty("diffThreshold")) ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
         System.out.println("Parameter diffThreshold=" + toolArgs.diffThreshold);
