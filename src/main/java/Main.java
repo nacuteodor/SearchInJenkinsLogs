@@ -22,6 +22,7 @@ import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Created by Teo on 7/30/2016.
@@ -230,19 +231,26 @@ public class Main {
             allAvailableBackupBuilds.addAll(Arrays.asList(Arrays.asList(Arrays.asList(new FileHelper().getDirFilesList(backupJobDirFile.getAbsolutePath(), "", false)).stream().map(new Function<String, Integer>() {
                 @Override
                 public Integer apply(String t) {
-                    return Integer.valueOf(t);
+                    String[] tokens = t.split(KEYS_SEPARATOR);
+                    Integer buildNumber = Integer.valueOf(tokens[0]);
+                    return buildNumber;
                 }
             }).toArray()).toArray(new Integer[0])));
+            allAvailableBackupBuilds.removeIf(new Predicate<Integer>() {
+                @Override
+                public boolean test(Integer integer) {
+                    File unfinishedBackupBuildDirFile = new File(backupJobDirFile + File.separator + integer + KEYS_SEPARATOR + "Unfinished");
+                    return unfinishedBackupBuildDirFile.exists();
+                }
+            });
         }
         List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
         if (backupJob) {
             builds.clear();
             builds.addAll(allAvailableBuildsList);
+            builds.removeAll(allAvailableBackupBuilds);
         } else {
             builds.retainAll(allAvailableBuildsList);
-        }
-//        backupBuilds.removeAll(allAvailableBuildsList);
-        if (!backupJob) {
             backupBuilds.retainAll(allAvailableBackupBuilds);
         }
         // remove the last available job build from backup builds list, as this may not be a finished build
@@ -307,7 +315,7 @@ public class Main {
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
         String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json";
         String jobResponse = getUrlResponse(apiJobUrl);
-        if (toolArgs.useBackup || toolArgs.backupJob) {
+        if (toolArgs.useBackup || toolArgs.backupJob || toolArgs.removeBackup) {
             Validate.notEmpty(toolArgs.backupPath, "backupPath parameter is empty!");
             toolArgs.backupJobDirFile = new File(toolArgs.backupPath + File.separator + encodeFile(toolArgs.jobUrl));
             toolArgs.backupJobDirFile.mkdirs();
@@ -334,7 +342,12 @@ public class Main {
         Integer processCount = 0;
         for (Integer buildNumber : toolArgs.builds) {
             List<String> nodesUrls;
-            File backupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber);
+            File finishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber);
+            File unfinishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber + KEYS_SEPARATOR + "Unfinished");
+            File backupBuildDirFile = finishedBackupBuildDirFile;
+            if (toolArgs.backupJob) {
+                backupBuildDirFile = unfinishedBackupBuildDirFile;
+            }
             Boolean useBackup = backupBuilds.contains(buildNumber);
             if (useBackup) {
                 nodesUrls = Arrays.asList(new FileHelper().getDirFilesList(backupBuildDirFile.getAbsolutePath(), "", false));
@@ -344,7 +357,8 @@ public class Main {
                 nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
             }
             if (!useBackup && (toolArgs.removeBackup || toolArgs.backupJob)) {
-                FileUtils.deleteQuietly(backupBuildDirFile);
+                FileUtils.deleteQuietly(finishedBackupBuildDirFile);
+                FileUtils.deleteQuietly(unfinishedBackupBuildDirFile);
             }
             if (toolArgs.backupJob) {
                 backupBuildDirFile.mkdir();
@@ -381,6 +395,16 @@ public class Main {
             }
         }
         executorService.shutdown();
+        // remove "#Unfinished" from build directories names
+        for (Integer buildNumber : toolArgs.builds) {
+            File unfinishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber + KEYS_SEPARATOR + "Unfinished");
+            File finishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber);
+            if (toolArgs.backupJob) {
+                if (!unfinishedBackupBuildDirFile.renameTo(finishedBackupBuildDirFile)) {
+                    throw new IllegalStateException("Couldn't rename " + unfinishedBackupBuildDirFile + " directory to " + finishedBackupBuildDirFile);
+                }
+            }
+        }
 
         // ======== PRINT THE NODES/TESTS MATCHING THE SEARCHED TEXT ========
         // sort the results in ascending buildNumber_nodeUrl order
