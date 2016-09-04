@@ -1,11 +1,10 @@
-import com.jayway.jsonpath.Criteria;
-import com.jayway.jsonpath.Filter;
 import com.jayway.jsonpath.JsonPath;
-import net.minidev.json.JSONObject;
 import org.apache.commons.collections4.map.HashedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Validate;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -15,12 +14,14 @@ import org.xml.sax.SAXException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.URL;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Function;
 
 /**
  * Created by Teo on 7/30/2016.
@@ -30,12 +31,14 @@ import java.util.concurrent.*;
  */
 public class Main {
 
-    private static final String buildNumbersJsonPath = "$.builds[?]";
+    private static final String buildsJsonPath = "$.builds[?]";
     private static final String urlJsonPath = "$url";
     private static final String buildNumberJsonPath = "number";
     private static final String runsNumberUrlJsonPath = "$.runs[?(@.number == %d)].url";
-    static final String artifactsRelativePathJsonPath = "$.artifacts[*].relativePath";
     private static final String KEYS_SEPARATOR = "#";
+    static final String artifactsRelativePathJsonPath = "$.artifacts[*].relativePath";
+    static final String buildsNumberJsonPath = "$.builds[*].number";
+    static final String buildsNumberUrlJsonPath = "$.builds[?(@.number == %d)].url";
 
     static String getUrlResponse(String urlString) throws IOException {
         URL url = new URL(urlString);
@@ -136,48 +139,47 @@ public class Main {
      * Matches the @searchedText in each test failure for a test and return a list with the Jenkins links to the failed tests reports
      *
      * @param failureNodes the xml failure/error nodes for a test case element
-     * @param testUrl the test url
-     * @param buildNumber build number
-     * @param nodeUrl node URL
-     * @param searchInJUnitReports true if we search a regular expression in failure messages
-     * @param groupTestsFailures true if it groups failures based on stacktrace and failure message
-     * @param searchedText the regular expression to match with the failure message
+     * @param testUrl      the test url
+     * @param buildNumber  build number
+     * @param nodeUrl      node URL
+     * @param toolArgs:    toolArgs.searchInJUnitReports true if we search a regular expression in failure messages
+     *                     toolArgs.groupTestsFailures true if it groups failures based on stacktrace and failure message
+     *                     toolArgs.searchedText the regular expression to match with the failure message
      * @return a list with the Jenkins links to the failed tests reports
      */
-   private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String buildNumber, String nodeUrl, boolean searchInJUnitReports, boolean groupTestsFailures, String searchedText) {
-       List<String> matchedFailedTests = new ArrayList<>();
-       ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
-       for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
-           Element failureElement = (Element) failureNodes.item(failureNodeIndex);
-           String message = failureElement.getAttribute("message");
-           if (searchInJUnitReports && Main.findSearchedTextInContent(searchedText, message)) {
-               matchedFailedTests.add(testUrl);
-           }
-           if (groupTestsFailures) {
-               String stacktrace = failureElement.getTextContent();
-               String failureToCompare = stacktrace.concat(": ").concat(message.split("\\n")[0]);
-               testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
-           }
-       }
-       return new FailuresMatchResult(matchedFailedTests, testsFailures);
+    private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String buildNumber, String nodeUrl, ToolArgs toolArgs) {
+        List<String> matchedFailedTests = new ArrayList<>();
+        ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
+        for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
+            Element failureElement = (Element) failureNodes.item(failureNodeIndex);
+            String message = failureElement.getAttribute("message");
+            if (toolArgs.searchInJUnitReports && Main.findSearchedTextInContent(toolArgs.searchedText, message)) {
+                matchedFailedTests.add(testUrl);
+            }
+            if (toolArgs.groupTestsFailures) {
+                String stacktrace = failureElement.getTextContent();
+                String failureToCompare = stacktrace.concat(": ").concat(message.split("\\n")[0]);
+                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
+            }
+        }
+        return new FailuresMatchResult(matchedFailedTests, testsFailures);
     }
 
     /**
      * Matches the @searchedText in each test failure and return a list with the Jenkins links to the failed tests reports
      *
      * @param jUnitReportXml the JUnit xml report as a String
-     * @param buildNumber build number
-     * @param nodeUrl node URL
-     * @param searchInJUnitReports true if we search a regular expression in failure messages
-     * @param groupTestsFailures true if it groups failures based on stacktrace and failure message
-     * @param searchedText the regular expression to match with the failure message
+     * @param buildNumber    build number
+     * @param nodeUrl        node URL
+     * @param toolArgs:      toolArgs.searchInJUnitReports true if we search a regular expression in failure messages
+     *                       toolArgs.groupTestsFailures true if it groups failures based on stacktrace and failure message
+     *                       toolArgs.searchedText the regular expression to match with the failure message
      * @return a list with the Jenkins links to the failed tests reports
      * @throws ParserConfigurationException
      * @throws IOException
      * @throws SAXException
      */
-    static FailuresMatchResult matchJUnitReportFailures(String jUnitReportXml, String buildNumber, String nodeUrl,
-                                                        boolean searchInJUnitReports, boolean groupTestsFailures, String searchedText) throws ParserConfigurationException, IOException, SAXException {
+    static FailuresMatchResult matchJUnitReportFailures(String jUnitReportXml, String buildNumber, String nodeUrl, ToolArgs toolArgs) throws ParserConfigurationException, IOException, SAXException {
         List<String> matchedFailedTests = new ArrayList<>();
         Map<String, Integer> testsCount = new HashedMap<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
@@ -198,11 +200,11 @@ public class Main {
                 testsCount.put(testUrl, ++testCount);
                 testUrl = testCount < 2 ? testUrl : testUrl.concat("_").concat(String.valueOf(testCount));
                 NodeList failureNodes = testCaseElement.getElementsByTagName("failure");
-                FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, buildNumber, nodeUrl, searchInJUnitReports, groupTestsFailures, searchedText);
+                FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, buildNumber, nodeUrl, toolArgs);
                 matchedFailedTests.addAll(failuresMatchResult.matchedFailedTests);
                 testsFailures.putAll(failuresMatchResult.testsFailures);
                 NodeList errorNodes = testCaseElement.getElementsByTagName("error");
-                FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, buildNumber, nodeUrl, searchInJUnitReports, groupTestsFailures, searchedText);
+                FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, buildNumber, nodeUrl, toolArgs);
                 matchedFailedTests.addAll(errorsMatchResult.matchedFailedTests);
                 testsFailures.putAll(errorsMatchResult.testsFailures);
             }
@@ -210,81 +212,138 @@ public class Main {
         return new FailuresMatchResult(matchedFailedTests, testsFailures);
     }
 
+    static String encodeFile(String file) throws UnsupportedEncodingException {
+        return URLEncoder.encode(file, Charset.defaultCharset().name());
+    }
+
+    static String decodeFile(String file) throws UnsupportedEncodingException {
+        return URLDecoder.decode(file, Charset.defaultCharset().name());
+    }
+
+    public static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean useBackup) {
+        Set<Integer> backupBuilds = new HashSet<>();
+        Set<Integer> allAvailableBackupBuilds = new HashSet<>();
+        backupBuilds.addAll(builds);
+        if (useBackup && backupJobDirFile.exists()) {
+            allAvailableBackupBuilds.addAll(Arrays.asList(Arrays.asList(Arrays.asList(new FileHelper().getDirFilesList(backupJobDirFile.getAbsolutePath(), "", false)).stream().map(new Function<String, Integer>() {
+                @Override
+                public Integer apply(String t) {
+                    return Integer.valueOf(t);
+                }
+            }).toArray()).toArray(new Integer[0])));
+        }
+        List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
+        builds.retainAll(allAvailableBuildsList);
+//        backupBuilds.removeAll(allAvailableBuildsList);
+        backupBuilds.retainAll(allAvailableBackupBuilds);
+        // remove the last available job build from backup builds list, as this may not be a finished build
+        if (allAvailableBuildsList.size() > 0) {
+            backupBuilds.remove(allAvailableBuildsList.get(0));
+        }
+        if (lastNBuilds.size() < lastBuildsCount) {
+            allAvailableBackupBuilds.removeAll(lastNBuilds);
+            List<Integer> allAvailableBackupBuildsList = new ArrayList<>();
+            allAvailableBackupBuildsList.addAll(allAvailableBackupBuilds);
+            allAvailableBackupBuildsList.sort(null);
+            if (allAvailableBackupBuilds.size() > 0) {
+                List<Integer> otherBuildsFromBackup = allAvailableBackupBuildsList.subList(allAvailableBackupBuildsList.size() - 1, allAvailableBackupBuildsList.size() - Math.min(allAvailableBackupBuildsList.size(), lastBuildsCount - lastNBuilds.size()));
+                backupBuilds.addAll(otherBuildsFromBackup);
+            }
+        }
+        builds.addAll(backupBuilds);
+        return backupBuilds;
+    }
+
     public static void main(String[] args) throws IOException {
         // ======== GET AND PARSE THE ARGUMENTS VALUES ========
-        String jobUrl = System.getProperty("jobUrl");
-        if (StringUtils.isEmpty(jobUrl)) {
+        ToolArgs toolArgs = new ToolArgs();
+        toolArgs.jobUrl = System.getProperty("jobUrl");
+        if (StringUtils.isEmpty(toolArgs.jobUrl)) {
             throw new IllegalArgumentException("-DjobUrl parameter cannot be empty. Please, provide a valid URL!");
         }
-        System.out.println("Parameter jobUrl=" + jobUrl);
-        String newUrlPrefix = System.getProperty("newUrlPrefix");
-        System.out.println("Parameter newUrlPrefix=" + newUrlPrefix);
-        newUrlPrefix = StringUtils.isEmpty(newUrlPrefix) ? jobUrl : newUrlPrefix;
-        Boolean searchInJUnitReports = StringUtils.isEmpty(System.getProperty("searchInJUnitReports")) ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
-        System.out.println("Parameter searchInJUnitReports=" + searchInJUnitReports);
-        String threadPoolSizeString = System.getProperty("threadPoolSize");
-        Integer threadPoolSize = StringUtils.isEmpty(System.getProperty("threadPoolSize")) ? 0 : Integer.parseInt(threadPoolSizeString);
-        System.out.println("Parameter threadPoolSize=" + threadPoolSize);
-        Set<Integer> builds = parseBuilds(System.getProperty("builds"));
+        System.out.println("Parameter jobUrl=" + toolArgs.jobUrl);
+        toolArgs.newUrlPrefix = System.getProperty("newUrlPrefix");
+        System.out.println("Parameter newUrlPrefix=" + toolArgs.newUrlPrefix);
+        toolArgs.newUrlPrefix = StringUtils.isEmpty(toolArgs.newUrlPrefix) ? toolArgs.jobUrl : toolArgs.newUrlPrefix;
+        toolArgs.searchInJUnitReports = StringUtils.isEmpty(System.getProperty("searchInJUnitReports")) ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
+        System.out.println("Parameter searchInJUnitReports=" + toolArgs.searchInJUnitReports);
+        toolArgs.threadPoolSizeString = System.getProperty("threadPoolSize");
+        toolArgs.threadPoolSize = StringUtils.isEmpty(System.getProperty("threadPoolSize")) ? 0 : Integer.parseInt(toolArgs.threadPoolSizeString);
+        System.out.println("Parameter threadPoolSize=" + toolArgs.threadPoolSize);
+        toolArgs.builds = parseBuilds(System.getProperty("builds"));
         // in case there is no build number specified, search in the last job build artifacts
-        Integer lastBuildsCount = builds.size() == 0 ? 1 : 0;
-        lastBuildsCount = StringUtils.isEmpty(System.getProperty("lastBuildsCount")) ? lastBuildsCount : Integer.parseInt(System.getProperty("lastBuildsCount"));
-        System.out.println("Parameter lastBuildsCount=" + lastBuildsCount);
-        String artifactsFilters = System.getProperty("artifactsFilters") == null ? "" : System.getProperty("artifactsFilters");
-        String searchedText = System.getProperty("searchedText") == null ? "" : System.getProperty("searchedText");
-        System.out.println("Parameter searchedText=" + searchedText);
-        Boolean groupTestsFailures = StringUtils.isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
-        System.out.println("Parameter groupTestsFailures=" + groupTestsFailures);
+        toolArgs.lastBuildsCount = toolArgs.builds.size() == 0 ? 1 : 0;
+        toolArgs.lastBuildsCount = StringUtils.isEmpty(System.getProperty("lastBuildsCount")) ? toolArgs.lastBuildsCount : Integer.parseInt(System.getProperty("lastBuildsCount"));
+        System.out.println("Parameter lastBuildsCount=" + toolArgs.lastBuildsCount);
+        toolArgs.artifactsFilters = System.getProperty("artifactsFilters") == null ? "" : System.getProperty("artifactsFilters");
+        System.out.println("Parameter artifactsFilters=" + toolArgs.artifactsFilters);
+        toolArgs.searchedText = System.getProperty("searchedText") == null ? "" : System.getProperty("searchedText");
+        System.out.println("Parameter searchedText=" + toolArgs.searchedText);
+        toolArgs.groupTestsFailures = StringUtils.isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
+        System.out.println("Parameter groupTestsFailures=" + toolArgs.groupTestsFailures);
+        toolArgs.groupTestsFailures = true;
         // the maximum difference threshold as a percentage of difference distance between 2 failures and the maximum possible distance for the shorter failure
-        double diffThreshold = StringUtils.isEmpty(System.getProperty("diffThreshold")) ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
-        System.out.println("Parameter diffThreshold=" + diffThreshold);
+        toolArgs.diffThreshold = StringUtils.isEmpty(System.getProperty("diffThreshold")) ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
+        System.out.println("Parameter diffThreshold=" + toolArgs.diffThreshold);
+        toolArgs.backupJob = StringUtils.isEmpty(System.getProperty("backupJob")) ? false : Boolean.valueOf(System.getProperty("backupJob"));
+        System.out.println("Parameter backupJob=" + toolArgs.backupJob);
+        toolArgs.useBackup = StringUtils.isEmpty(System.getProperty("useBackup")) ? false : Boolean.valueOf(System.getProperty("useBackup"));
+        System.out.println("Parameter useBackup=" + toolArgs.useBackup);
+        toolArgs.removeBackup = StringUtils.isEmpty(System.getProperty("removeBackup")) ? false : Boolean.valueOf(System.getProperty("removeBackup"));
+        System.out.println("Parameter removeBackup=" + toolArgs.removeBackup);
+        toolArgs.backupPath = System.getProperty("backupPath") == null ? "" : System.getProperty("backupPath");
+        System.out.println("Parameter backupPath=" + toolArgs.backupPath);
 
-        final String lastNBuildNumbersJsonPath = "$.builds[:" + lastBuildsCount + "].number";
+        final String lastNBuildNumbersJsonPath = "$.builds[:" + toolArgs.lastBuildsCount + "].number";
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
-        String apiJobUrl = jobUrl.replace(jobUrl, newUrlPrefix) + "/api/json";
+        String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json";
         String jobResponse = getUrlResponse(apiJobUrl);
+        if (toolArgs.useBackup || toolArgs.backupJob) {
+            Validate.notEmpty(toolArgs.backupPath, "backupPath parameter is empty!");
+            toolArgs.backupJobDirFile = new File(toolArgs.backupPath + File.separator + encodeFile(toolArgs.jobUrl));
+            toolArgs.backupJobDirFile.mkdirs();
+        }
         List<Integer> lastNBuilds;
         try {
             lastNBuilds = JsonPath.read(jobResponse, lastNBuildNumbersJsonPath);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Exception when parsing the job api response for URL " + apiJobUrl + " : " + jobResponse, e);
         }
+        toolArgs.builds.addAll(lastNBuilds);
+        Set<Integer> backupBuilds = updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.useBackup);
+        System.out.println("Parameter builds=" + toolArgs.builds);
 
-        builds.addAll(lastNBuilds);
-        System.out.println("Parameter builds=" + builds);
-        Filter buildsFilter = Filter.filter(
-                Criteria.where(buildNumberJsonPath).in(builds)
-        );
-
-        System.out.println("\nPrint the nodes matching the searched text \"" + searchedText + "\" in artifacts: ");
-        List<JSONObject> buildsJsons = JsonPath.read(jobResponse, buildNumbersJsonPath, buildsFilter);
+        System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
         ExecutorService executorService;
-        if (threadPoolSize <= 0) {
+        if (toolArgs.threadPoolSize <= 0) {
             executorService = Executors.newWorkStealingPool();
         } else {
-            executorService = Executors.newFixedThreadPool(threadPoolSize);
+            executorService = Executors.newFixedThreadPool(toolArgs.threadPoolSize);
         }
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = 0;
-        for (JSONObject buildJson : buildsJsons) {
-            Integer buildNumber = JsonPath.read(buildJson, buildNumberJsonPath);
-            String buildUrl = JsonPath.read(buildJson, urlJsonPath);
-            String buildApiResp = getUrlResponse(buildUrl.replace(jobUrl, newUrlPrefix) + "/api/json");
-            List<String> nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
+        for (Integer buildNumber : toolArgs.builds) {
+            List<String> nodesUrls;
+            File backupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber);
+            Boolean useBackup = backupBuilds.contains(buildNumber);
+            if (useBackup) {
+                nodesUrls = Arrays.asList(new FileHelper().getDirFilesList(backupBuildDirFile.getAbsolutePath(), "", false));
+            } else {
+                String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
+                String buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json");
+                nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
+            }
+            if (!useBackup && (toolArgs.removeBackup || toolArgs.backupJob)) {
+                FileUtils.deleteQuietly(backupBuildDirFile);
+            }
+            if (toolArgs.backupJob) {
+                backupBuildDirFile.mkdir();
+            }
 
             for (String nodeUrl : nodesUrls) {
-                completionService.submit(new JenkinsNodeArtifactsFilter(
-                        jobUrl,
-                        newUrlPrefix,
-                        buildNumber.toString(),
-                        nodeUrl,
-                        artifactsFilters,
-                        searchInJUnitReports,
-                        groupTestsFailures,
-                        searchedText));
-
+                completionService.submit(new JenkinsNodeArtifactsFilter(toolArgs, String.valueOf(buildNumber), nodeUrl, useBackup, backupBuildDirFile));
             }
             processCount += nodesUrls.size();
         }
@@ -335,14 +394,14 @@ public class Main {
                 lastNode = currentNode;
                 System.out.println("\tNode: ".concat(currentNode));
             }
-            if (searchInJUnitReports) {
+            if (toolArgs.searchInJUnitReports) {
                 System.out.println("\t\tFailed test report: ".concat(buildTestReportLink(currentNode, buildNodeArtifact.getValue())));
             } else {
                 System.out.println("\t\tArtifact relative path: ".concat(buildNodeArtifact.getValue()));
             }
         }
 
-        if (!groupTestsFailures) {
+        if (!toolArgs.groupTestsFailures) {
             return;
         }
 
@@ -358,11 +417,11 @@ public class Main {
                     groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
                     break;
                 }
-                int distanceThreshold = diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * diffThreshold) / 100);
+                int distanceThreshold = toolArgs.diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * toolArgs.diffThreshold) / 100);
                 double currentThreshold = (double) StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, distanceThreshold);
                 currentThreshold = currentThreshold == -1 ? maxDistance : currentThreshold;
                 currentThreshold = currentThreshold * 100 / maxDistance;
-                if (currentThreshold <= diffThreshold) {
+                if (currentThreshold <= toolArgs.diffThreshold) {
                     groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
                     break;
                 }
