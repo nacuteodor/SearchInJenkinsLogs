@@ -220,11 +220,13 @@ public class Main {
         return URLDecoder.decode(file, Charset.defaultCharset().name());
     }
 
-    public static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean useBackup) {
+    public static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean backupJob, Boolean useBackup) {
         Set<Integer> backupBuilds = new HashSet<>();
-        Set<Integer> allAvailableBackupBuilds = new HashSet<>();
-        backupBuilds.addAll(builds);
-        if (useBackup && backupJobDirFile.exists()) {
+        List<Integer> allAvailableBackupBuilds = new ArrayList<>();
+        if (!backupJob && useBackup) {
+            backupBuilds.addAll(builds);
+        }
+        if ((backupJob || useBackup) && backupJobDirFile.exists()) {
             allAvailableBackupBuilds.addAll(Arrays.asList(Arrays.asList(Arrays.asList(new FileHelper().getDirFilesList(backupJobDirFile.getAbsolutePath(), "", false)).stream().map(new Function<String, Integer>() {
                 @Override
                 public Integer apply(String t) {
@@ -233,9 +235,16 @@ public class Main {
             }).toArray()).toArray(new Integer[0])));
         }
         List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
-        builds.retainAll(allAvailableBuildsList);
+        if (backupJob) {
+            builds.clear();
+            builds.addAll(allAvailableBuildsList);
+        } else {
+            builds.retainAll(allAvailableBuildsList);
+        }
 //        backupBuilds.removeAll(allAvailableBuildsList);
-        backupBuilds.retainAll(allAvailableBackupBuilds);
+        if (!backupJob) {
+            backupBuilds.retainAll(allAvailableBackupBuilds);
+        }
         // remove the last available job build from backup builds list, as this may not be a finished build
         if (allAvailableBuildsList.size() > 0) {
             backupBuilds.remove(allAvailableBuildsList.get(0));
@@ -311,7 +320,7 @@ public class Main {
             throw new IllegalArgumentException("Exception when parsing the job api response for URL " + apiJobUrl + " : " + jobResponse, e);
         }
         toolArgs.builds.addAll(lastNBuilds);
-        Set<Integer> backupBuilds = updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.useBackup);
+        Set<Integer> backupBuilds = updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup);
         System.out.println("Parameter builds=" + toolArgs.builds);
 
         System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
