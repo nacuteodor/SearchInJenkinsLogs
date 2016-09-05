@@ -1,10 +1,17 @@
 import com.jayway.jsonpath.JsonPath;
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.ParserConfigurationException;
+import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 
@@ -13,37 +20,21 @@ import java.util.concurrent.Callable;
  */
 class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter> {
 
-    private final String jobUrl;
-    private final String newUrlPrefix;
-    private final String artifactsFilters;
-    private final String searchedText;
-    private final boolean searchInJUnitReports;
-    private final boolean groupTestsFailures;
+    final ToolArgs toolArgs;
     final String buildNumber;
-    final String nodeUrl;
-
-    List<String>                         matchedArtifacts = new ArrayList<>();
-    List<String>                         matchedFailedTests = new ArrayList<>();
+    final File backupBuildDirFile;
+    final Boolean useBackup;
+    String nodeUrl;
+    List<String> matchedArtifacts = new ArrayList<>();
+    List<String> matchedFailedTests = new ArrayList<>();
     ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
 
-    JenkinsNodeArtifactsFilter(
-            String jobUrl,
-            String newUrlPrefix,
-            String buildNumber,
-            String nodeUrl,
-            String artifactsFilters,
-            boolean searchInJUnitReports,
-            boolean groupTestsFailures,
-            String searchedText) {
-
-        this.jobUrl = jobUrl;
+    JenkinsNodeArtifactsFilter(ToolArgs toolArgs, String buildNumber, String nodeUrl, Boolean useBackup, File backupBuildDirFile) {
+        this.toolArgs = toolArgs;
         this.buildNumber = buildNumber;
-        this.newUrlPrefix = newUrlPrefix;
         this.nodeUrl = nodeUrl;
-        this.artifactsFilters = artifactsFilters;
-        this.searchInJUnitReports = searchInJUnitReports;
-        this.groupTestsFailures = groupTestsFailures;
-        this.searchedText = searchedText;
+        this.useBackup = useBackup;
+        this.backupBuildDirFile = backupBuildDirFile;
     }
 
     /**
@@ -53,10 +44,10 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
     public JenkinsNodeArtifactsFilter call() {
         try {
             processNode();
-        } catch( IOException | ParserConfigurationException | SAXException e ) {
+        } catch (IOException | ParserConfigurationException | SAXException e) {
             String errorLog = "Exception when when processing node: build: " + buildNumber + " node: " + nodeUrl;
-            System.err.println( errorLog + e.getLocalizedMessage() );
-            throw new RuntimeException( errorLog, e );
+            System.err.println(errorLog + e.getLocalizedMessage());
+            throw new RuntimeException(errorLog, e);
         }
         return this;
     }
@@ -66,23 +57,47 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
      * Saves the artifacts where it finds the @searchedText in matchedArtifacts list
      */
     private void processNode() throws IOException, ParserConfigurationException, SAXException {
-        String nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(jobUrl, newUrlPrefix).concat("/api/json"));
-        List<String> artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
-        String artifactUrlPrefix = newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(nodeUrl.replace(jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
+        File backupNodeDirFile = new File(backupBuildDirFile + File.separator + nodeUrl);
+        if (!useBackup && toolArgs.backupJob) {
+            backupNodeDirFile = new File(backupBuildDirFile + File.separator + Main.encodeFile(nodeUrl));
+            backupNodeDirFile.mkdir();
+        }
+        List<String> artifactsRelativePaths;
+        String artifactUrlPrefix = null;
+        if (useBackup) {
+            artifactsRelativePaths = Arrays.asList(new FileHelper().getDirFilesList(backupNodeDirFile.getAbsolutePath(), "", false));
+            nodeUrl = Main.decodeFile(nodeUrl);
+        } else {
+            String nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
+            artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
+            artifactUrlPrefix = toolArgs.newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(nodeUrl.replace(toolArgs.jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
+        }
         for (String artifactRelativePath : artifactsRelativePaths) {
-            if (!Main.artifactUrlMatchesFilters(artifactRelativePath, artifactsFilters)) {
+            if (!Main.artifactUrlMatchesFilters(useBackup ? Main.decodeFile(artifactRelativePath) : artifactRelativePath, toolArgs.artifactsFilters)) {
                 continue;
             }
-            String artifactUrl =  artifactUrlPrefix + artifactRelativePath;
-            String artifactFileContent = Main.getUrlResponse(artifactUrl);
-            if (searchInJUnitReports || groupTestsFailures) {
-                FailuresMatchResult failuresMatchResult = Main.matchJUnitReportFailures(artifactFileContent, buildNumber, nodeUrl, searchInJUnitReports, groupTestsFailures, searchedText);
+            String artifactFileContent;
+            if (useBackup) {
+                artifactFileContent = IOUtils.toString(new FileReader(backupNodeDirFile.getAbsoluteFile() + File.separator + artifactRelativePath));
+                artifactRelativePath = Main.decodeFile(artifactRelativePath);
+            } else {
+                String artifactUrl = artifactUrlPrefix + artifactRelativePath;
+                artifactFileContent = Main.getUrlResponse(artifactUrl);
+            }
+            if (toolArgs.backupJob) {
+                if (!useBackup) {
+                    FileUtils.writeStringToFile(new File(backupNodeDirFile.getAbsolutePath() + File.separator + Main.encodeFile(artifactRelativePath)), artifactFileContent, Charset.defaultCharset());
+                }
+                continue;
+            }
+            if (toolArgs.searchInJUnitReports || toolArgs.groupTestsFailures) {
+                FailuresMatchResult failuresMatchResult = Main.matchJUnitReportFailures(artifactFileContent, buildNumber, nodeUrl, toolArgs);
                 List<String> reportMatchedFailedTests = failuresMatchResult.matchedFailedTests;
                 matchedFailedTests.addAll(reportMatchedFailedTests);
                 testsFailures = failuresMatchResult.testsFailures;
                 continue;
             }
-            if (Main.findSearchedTextInContent(searchedText, artifactFileContent))
+            if (Main.findSearchedTextInContent(toolArgs.searchedText, artifactFileContent))
                 matchedArtifacts.add(artifactRelativePath);
         }
     }
