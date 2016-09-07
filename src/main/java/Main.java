@@ -264,7 +264,7 @@ public class Main {
             allAvailableBackupBuildsList.addAll(allAvailableBackupBuilds);
             allAvailableBackupBuildsList.sort(null);
             if (allAvailableBackupBuilds.size() > 0) {
-                List<Integer> otherBuildsFromBackup = allAvailableBackupBuildsList.subList(allAvailableBackupBuildsList.size() - 1, allAvailableBackupBuildsList.size() - Math.min(allAvailableBackupBuildsList.size(), lastBuildsCount - lastNBuilds.size()));
+                List<Integer> otherBuildsFromBackup = allAvailableBackupBuildsList.subList(allAvailableBackupBuildsList.size() - Math.min(allAvailableBackupBuildsList.size(), lastBuildsCount - lastNBuilds.size()), allAvailableBackupBuildsList.size());
                 backupBuilds.addAll(otherBuildsFromBackup);
             }
         }
