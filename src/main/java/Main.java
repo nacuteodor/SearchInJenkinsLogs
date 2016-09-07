@@ -1,4 +1,5 @@
 import com.jayway.jsonpath.JsonPath;
+import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.map.HashedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.commons.io.FileUtils;
@@ -311,6 +312,7 @@ public class Main {
         System.out.println("Parameter backupPath=" + toolArgs.backupPath);
 
         final String lastNBuildNumbersJsonPath = "$.builds[:" + toolArgs.lastBuildsCount + "].number";
+        final String buildNumbersJsonPath = "$.builds[*].number";
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
         String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json";
@@ -320,9 +322,12 @@ public class Main {
             toolArgs.backupJobDirFile = new File(toolArgs.backupPath + File.separator + encodeFile(toolArgs.jobUrl));
             toolArgs.backupJobDirFile.mkdirs();
         }
-        List<Integer> lastNBuilds;
+        List<Integer> lastNBuilds = new ArrayList<>();
         try {
-            lastNBuilds = JsonPath.read(jobResponse, lastNBuildNumbersJsonPath);
+            if (toolArgs.lastBuildsCount > 0) {
+                lastNBuilds = JsonPath.read(jobResponse, buildsNumberJsonPath);
+                lastNBuilds = lastNBuilds.subList(0, Math.min(toolArgs.lastBuildsCount, lastNBuilds.size()));
+            }
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Exception when parsing the job api response for URL " + apiJobUrl + " : " + jobResponse, e);
         }
@@ -369,8 +374,8 @@ public class Main {
             }
             processCount += nodesUrls.size();
         }
-        ArrayListValuedHashMap<String, String> buildNodesArtifacts = new ArrayListValuedHashMap<>();
-        ArrayListValuedHashMap<String, TestFailure> buildNodesFailures = new ArrayListValuedHashMap<>();
+        MultiValuedMap<String, String> buildNodesArtifacts = new ArrayListValuedHashMap<>();
+        MultiValuedMap<String, TestFailure> buildNodesFailures = new ArrayListValuedHashMap<>();
         // now see if there are exceptions while computing the builds nodes and extract the results
         for (int process = 0; process < processCount; process++) {
             try {
@@ -439,7 +444,7 @@ public class Main {
 
         // ======== PRINT THE COMMON FAILURES ========
         System.out.println("\nGroup common failures from tests reports: ");
-        ArrayListValuedHashMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
+        MultiValuedMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
         for (Map.Entry<String, TestFailure> buildNodeFailure : buildNodesFailures.entries()) {
             String failureKey = buildNodeFailure.getKey();
             String groupedBuildNodeFailureKey = null;
@@ -469,7 +474,7 @@ public class Main {
         ArrayListValuedHashMap<String, TestFailure> groupedBuildFailures = new ArrayListValuedHashMap<>();
         String failuresCountFormat = "%0".concat(String.valueOf(String.valueOf(groupedBuildNodesFailures.size()).length())).concat("d");
         for (String key : groupedBuildNodesFailures.keySet()) {
-            List<TestFailure> values = groupedBuildNodesFailures.get(key);
+            Collection<TestFailure> values = groupedBuildNodesFailures.get(key);
             TestFailure[] valuesArray = values.toArray(new TestFailure[0]);
             Arrays.parallelSort(valuesArray, (o1, o2) -> o1.testUrl.compareTo(o2.testUrl));
             groupedBuildFailures.putAll(String.format(failuresCountFormat, values.size()).concat(KEYS_SEPARATOR).concat(key), Arrays.asList(valuesArray));
