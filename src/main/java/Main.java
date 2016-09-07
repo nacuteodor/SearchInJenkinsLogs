@@ -250,7 +250,6 @@ public class Main {
             builds.clear();
             builds.addAll(allAvailableBuildsList);
             builds.removeAll(allAvailableBackupBuilds);
-            System.out.println("builds.removeAll(allAvailableBackupBuilds)=" + builds);
         } else {
             builds.retainAll(allAvailableBuildsList);
             backupBuilds.retainAll(allAvailableBackupBuilds);
@@ -270,7 +269,6 @@ public class Main {
             }
         }
         builds.addAll(backupBuilds);
-        System.out.println("builds.addAll(backupBuilds)=" + builds);
         return backupBuilds;
     }
 
