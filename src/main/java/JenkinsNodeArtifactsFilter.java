@@ -68,7 +68,13 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
             artifactsRelativePaths = Arrays.asList(new FileHelper().getDirFilesList(backupNodeDirFile.getAbsolutePath(), "", false));
             nodeUrl = Main.decodeFile(nodeUrl);
         } else {
-            String nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
+            String nodeUrlResp;
+            try {
+                nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
+            } catch (IOException e) {
+                System.err.println("Got exception when getting API response for node ".concat(nodeUrl).concat(": ").concat(e.toString()));
+                return;
+            }
             artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
             artifactUrlPrefix = toolArgs.newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(nodeUrl.replace(toolArgs.jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
         }
@@ -82,7 +88,12 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
                 artifactRelativePath = Main.decodeFile(artifactRelativePath);
             } else {
                 String artifactUrl = artifactUrlPrefix + artifactRelativePath.replace(" ", "%20");
-                artifactFileContent = Main.getUrlResponse(artifactUrl);
+                try {
+                    artifactFileContent = Main.getUrlResponse(artifactUrl);
+                } catch (IOException e) {
+                    System.err.println("Got exception when getting API response for artifact URL ".concat(artifactUrl).concat(": ").concat(e.toString()));
+                    continue;
+                }
             }
             if (toolArgs.backupJob) {
                 if (!useBackup) {

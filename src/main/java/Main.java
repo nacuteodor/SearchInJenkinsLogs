@@ -250,6 +250,7 @@ public class Main {
             builds.clear();
             builds.addAll(allAvailableBuildsList);
             builds.removeAll(allAvailableBackupBuilds);
+            System.out.println("builds.removeAll(allAvailableBackupBuilds)=" + builds);
         } else {
             builds.retainAll(allAvailableBuildsList);
             backupBuilds.retainAll(allAvailableBackupBuilds);
@@ -269,6 +270,7 @@ public class Main {
             }
         }
         builds.addAll(backupBuilds);
+        System.out.println("builds.addAll(backupBuilds)=" + builds);
         return backupBuilds;
     }
 
@@ -310,9 +312,6 @@ public class Main {
         System.out.println("Parameter removeBackup=" + toolArgs.removeBackup);
         toolArgs.backupPath = System.getProperty("backupPath") == null ? "" : System.getProperty("backupPath");
         System.out.println("Parameter backupPath=" + toolArgs.backupPath);
-
-        final String lastNBuildNumbersJsonPath = "$.builds[:" + toolArgs.lastBuildsCount + "].number";
-        final String buildNumbersJsonPath = "$.builds[*].number";
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
         String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json";
@@ -358,7 +357,13 @@ public class Main {
                 nodesUrls = Arrays.asList(new FileHelper().getDirFilesList(backupBuildDirFile.getAbsolutePath(), "", false));
             } else {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
-                String buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json");
+                String buildApiResp;
+                try {
+                    buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json");
+                } catch (IOException e) {
+                    System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
+                    continue;
+                }
                 nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
             }
             if (!useBackup && (toolArgs.removeBackup || toolArgs.backupJob)) {
