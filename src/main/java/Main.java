@@ -330,7 +330,9 @@ public class Main {
         }
         toolArgs.builds.addAll(lastNBuilds);
         Set<Integer> backupBuilds = updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup);
-        System.out.println("Parameter builds=" + toolArgs.builds);
+        List<Integer> sortedBuilds = new ArrayList<>(toolArgs.builds);
+        sortedBuilds.sort(null);
+        System.out.println("Parameter builds=" + sortedBuilds);
 
         System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
         ExecutorService executorService;
