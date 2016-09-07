@@ -405,6 +405,9 @@ public class Main {
             File unfinishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber + KEYS_SEPARATOR + "Unfinished");
             File finishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber);
             if (toolArgs.backupJob) {
+                if (finishedBackupBuildDirFile.exists()) {
+                    FileUtils.deleteQuietly(finishedBackupBuildDirFile);
+                }
                 if (!unfinishedBackupBuildDirFile.renameTo(finishedBackupBuildDirFile)) {
                     throw new IllegalStateException("Couldn't rename " + unfinishedBackupBuildDirFile + " directory to " + finishedBackupBuildDirFile);
                 }
