@@ -81,7 +81,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
                 artifactFileContent = IOUtils.toString(new FileReader(backupNodeDirFile.getAbsoluteFile() + File.separator + artifactRelativePath));
                 artifactRelativePath = Main.decodeFile(artifactRelativePath);
             } else {
-                String artifactUrl = artifactUrlPrefix + artifactRelativePath;
+                String artifactUrl = artifactUrlPrefix + artifactRelativePath.replace(" ", "%20");
                 artifactFileContent = Main.getUrlResponse(artifactUrl);
             }
             if (toolArgs.backupJob) {
