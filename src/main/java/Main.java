@@ -244,6 +244,11 @@ public class Main {
                     return unfinishedBackupBuildDirFile.exists();
                 }
             });
+            allAvailableBackupBuilds.sort(null);
+            // remove the last backup job build from backup builds list, as this may not be a finished build
+            if (allAvailableBackupBuilds.size() > 0) {
+                allAvailableBackupBuilds.remove(allAvailableBackupBuilds.size() - 1);
+            }
         }
         List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
         if (backupJob) {
@@ -260,11 +265,9 @@ public class Main {
         }
         if (lastNBuilds.size() < lastBuildsCount) {
             allAvailableBackupBuilds.removeAll(lastNBuilds);
-            List<Integer> allAvailableBackupBuildsList = new ArrayList<>();
-            allAvailableBackupBuildsList.addAll(allAvailableBackupBuilds);
-            allAvailableBackupBuildsList.sort(null);
+            allAvailableBackupBuilds.sort(null);
             if (allAvailableBackupBuilds.size() > 0) {
-                List<Integer> otherBuildsFromBackup = allAvailableBackupBuildsList.subList(allAvailableBackupBuildsList.size() - Math.min(allAvailableBackupBuildsList.size(), lastBuildsCount - lastNBuilds.size()), allAvailableBackupBuildsList.size());
+                List<Integer> otherBuildsFromBackup = allAvailableBackupBuilds.subList(allAvailableBackupBuilds.size() - Math.min(allAvailableBackupBuilds.size(), lastBuildsCount - lastNBuilds.size()), allAvailableBackupBuilds.size());
                 backupBuilds.addAll(otherBuildsFromBackup);
             }
         }
