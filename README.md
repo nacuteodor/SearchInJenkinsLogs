@@ -24,6 +24,9 @@ Easy to integrate the project with Intellij, JDK 8
 
 ## Please, give a star to this project if it helps you.
 
+## TODO:
+Will add support to compare 2 builds tests failures and show the difference.
+
 ## Contact
 [Profile](http://nacuteodor.wix.com/profile)
 
