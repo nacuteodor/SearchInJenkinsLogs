@@ -486,7 +486,7 @@ public class Main {
         toolArgs.jobUrl2 = isEmpty(System.getProperty("jobUrl2")) ? toolArgs.jobUrl : System.getProperty("jobUrl2");
         System.out.println("Parameter jobUrl2=" + toolArgs.jobUrl2);
         toolArgs.newUrlPrefix2 = System.getProperty("newUrlPrefix2");
-        toolArgs.newUrlPrefix2 = isEmpty(toolArgs.newUrlPrefix) ? toolArgs.jobUrl2 : toolArgs.newUrlPrefix2;
+        toolArgs.newUrlPrefix2 = isEmpty(toolArgs.newUrlPrefix2) ? toolArgs.jobUrl2 : toolArgs.newUrlPrefix2;
         System.out.println("Parameter newUrlPrefix2=" + toolArgs.newUrlPrefix2);
         toolArgs.searchInJUnitReports = isEmpty(System.getProperty("searchInJUnitReports")) ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
         System.out.println("Parameter searchInJUnitReports=" + toolArgs.searchInJUnitReports);
