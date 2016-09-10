@@ -308,8 +308,8 @@ public class Main {
         Integer processCount = 0;
         for (Integer buildNumber : toolArgs.builds) {
             List<String> nodesUrls;
-            File unfinishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile.getAbsolutePath().concat(File.separator).concat(String.valueOf(buildNumber)).concat(KEYS_SEPARATOR).concat("Unfinished"));
-            File finishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile.getAbsolutePath().concat(File.separator).concat(String.valueOf(buildNumber)));
+            File unfinishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)).concat(KEYS_SEPARATOR).concat("Unfinished"));
+            File finishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)));
             File backupBuildDirFile = finishedBackupBuildDirFile;
             if (toolArgs.backupJob) {
                 backupBuildDirFile = unfinishedBackupBuildDirFile;
