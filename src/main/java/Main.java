@@ -447,7 +447,7 @@ public class Main {
         // compare the tests failures and print the difference
         ArrayListValuedHashMap<String, TestFailure> groupedBuildFailures = new ArrayListValuedHashMap<>();
         String failuresCountFormat = "%0".concat(String.valueOf(String.valueOf(buildNodesTestFailures.size()).length())).concat("d");
-        System.out.println("\n#TestUrl\t#Failure\t#PreviousFailure");
+        System.out.println("\n#TestUrl\t#Failure\t#ReferenceFailure");
         int differencesCount = 0;
         for (Map.Entry<String, TestFailure> buildTestFailure : buildNodesTestFailuresArray) {
             String currentKey = buildTestFailure.getKey();
@@ -558,9 +558,9 @@ public class Main {
                     if (toolArgs.showTestsDifferences) {
                         for (Map.Entry<String, TestFailure> entry : completedProcess.testsFailures.entries()) {
                             if (completedProcess.toolArgs == toolArgs) {
-                                buildNodesTestFailures.putAll(entry.getValue().testName, entry.getValue());
+                                buildNodesTestFailures.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace(entry.getValue().buildNumber.concat("/"), ""), entry.getValue());
                             } else {
-                                buildNodesTestFailures2.putAll(entry.getValue().testName, entry.getValue());
+                                buildNodesTestFailures2.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace(entry.getValue().buildNumber.concat("/"), ""), entry.getValue());
                             }
                         }
                     } else {
