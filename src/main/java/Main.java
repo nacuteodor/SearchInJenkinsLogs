@@ -250,7 +250,6 @@ public class Main {
                 allAvailableBackupBuilds.remove(allAvailableBackupBuilds.size() - 1);
             }
         }
-        System.out.println("JsonPath.read(jobResponse, buildsNumberJsonPath=" +  jobResponse);
         List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
         if (backupJob) {
             builds.clear();
@@ -524,7 +523,6 @@ public class Main {
         toolArgs2.jobUrl = toolArgs.jobUrl2;
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
         toolArgs2.builds = toolArgs2.referenceBuild == null ? new HashSet<>() : new HashSet<>(Arrays.asList(toolArgs2.referenceBuild));
-        System.out.println("Parameter  toolArgs2.builds=" +  toolArgs2.builds);
         toolArgs2.lastBuildsCount = 0;
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
