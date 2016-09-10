@@ -523,7 +523,9 @@ public class Main {
         toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
         System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
-        toolArgs2.builds = toolArgs.referenceBuild == null ? new HashSet<>() : new HashSet<>(Arrays.asList(toolArgs2.referenceBuild));
+        toolArgs2.jobUrl = toolArgs.jobUrl2;
+        toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
+        toolArgs2.builds = toolArgs2.referenceBuild == null ? new HashSet<>() : new HashSet<>(Arrays.asList(toolArgs2.referenceBuild));
         toolArgs2.lastBuildsCount = 0;
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
