@@ -451,9 +451,6 @@ public class Main {
         int differencesCount = 0;
         for (Map.Entry<String, TestFailure> buildTestFailure : buildNodesTestFailuresArray) {
             String currentKey = buildTestFailure.getKey();
-            if (!buildNodesTestFailures2.keySet().contains(currentKey)) {
-                continue;
-            }
             List<TestFailure> referenceTestFailures = (List<TestFailure>) buildNodesTestFailures2.get(currentKey);
             boolean failureFound = false;
             for (TestFailure testFailure: referenceTestFailures) {
