@@ -576,8 +576,8 @@ public class Main {
         executorService.shutdown();
         // remove "#Unfinished" from build directories names
         for (Integer buildNumber : toolArgs.builds) {
-            File unfinishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile.getAbsolutePath().concat(File.separator).concat(String.valueOf(buildNumber)).concat(KEYS_SEPARATOR).concat("Unfinished"));
-            File finishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile.getAbsolutePath().concat(File.separator).concat(String.valueOf(buildNumber)));
+            File unfinishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)).concat(KEYS_SEPARATOR).concat("Unfinished"));
+            File finishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)));
             if (toolArgs.backupJob) {
                 if (finishedBackupBuildDirFile.exists()) {
                     FileUtils.deleteQuietly(finishedBackupBuildDirFile);
