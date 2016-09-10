@@ -538,8 +538,10 @@ public class Main {
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = submitBuildNodes(completionService, toolArgs);
-        // submit also the build nodes for jobUrl2, with build @referenceBuild
-        processCount += submitBuildNodes(completionService, toolArgs2);
+        if (toolArgs.showTestsDifferences) {
+            // submit also the build nodes for jobUrl2, with build @referenceBuild
+            processCount += submitBuildNodes(completionService, toolArgs2);
+        }
 
         MultiValuedMap<String, String> buildNodesArtifacts = new ArrayListValuedHashMap<>();
         MultiValuedMap<String, TestFailure> buildNodesFailures = new ArrayListValuedHashMap<>();
