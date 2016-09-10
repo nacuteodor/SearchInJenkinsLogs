@@ -439,7 +439,7 @@ public class Main {
 
     private static void printTheTestFailuresDifference(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesTestFailures, MultiValuedMap<String, TestFailure> buildNodesTestFailures2) {
         System.out.println("\nShow the test failures differences between 2 builds: ");
-        System.out.println("-> Found ".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat(" instead of ").concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat(" failed tests."));
+        System.out.println("-> Found ".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat(" instead of ").concat(String.valueOf(buildNodesTestFailures2.keySet().size())).concat(" failed tests."));
         // sort the results by testName in ascending order
         Map.Entry<String, TestFailure>[] buildNodesTestFailuresArray = buildNodesTestFailures.entries().toArray(new Map.Entry[0]);
         Arrays.parallelSort(buildNodesTestFailuresArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
