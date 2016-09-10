@@ -35,9 +35,6 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
  */
 public class Main {
 
-    private static final String buildsJsonPath = "$.builds[?]";
-    private static final String urlJsonPath = "$url";
-    private static final String buildNumberJsonPath = "number";
     private static final String runsNumberUrlJsonPath = "$.runs[?(@.number == %d)].url";
     private static final String KEYS_SEPARATOR = "#";
     static final String artifactsRelativePathJsonPath = "$.artifacts[*].relativePath";
@@ -253,6 +250,7 @@ public class Main {
                 allAvailableBackupBuilds.remove(allAvailableBackupBuilds.size() - 1);
             }
         }
+        System.out.println("JsonPath.read(jobResponse, buildsNumberJsonPath=" +  jobResponse);
         List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
         if (backupJob) {
             builds.clear();
@@ -526,6 +524,7 @@ public class Main {
         toolArgs2.jobUrl = toolArgs.jobUrl2;
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
         toolArgs2.builds = toolArgs2.referenceBuild == null ? new HashSet<>() : new HashSet<>(Arrays.asList(toolArgs2.referenceBuild));
+        System.out.println("Parameter  toolArgs2.builds=" +  toolArgs2.builds);
         toolArgs2.lastBuildsCount = 0;
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
