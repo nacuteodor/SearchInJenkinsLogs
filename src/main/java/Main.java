@@ -472,7 +472,7 @@ public class Main {
         System.out.println("-> Found ".concat(String.valueOf(differencesCount)).concat(" new test failures."));
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, CloneNotSupportedException {
         // ======== GET AND PARSE THE ARGUMENTS VALUES ========
         ToolArgs toolArgs = new ToolArgs();
         toolArgs.jobUrl = System.getProperty("jobUrl");
