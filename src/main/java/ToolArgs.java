@@ -27,5 +27,7 @@ public class ToolArgs implements Cloneable {
     Boolean showTestsDifferences;
 
     @Override
-    public native Object clone();
+    public Object clone() throws CloneNotSupportedException {
+        return super.clone();
+    }
 }
