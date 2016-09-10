@@ -466,7 +466,7 @@ public class Main {
                 differencesCount++;
                 TestFailure currentValue = buildTestFailure.getValue();
                 String referenceTestFailure = referenceTestFailures.size() > 0 ? referenceTestFailures.get(0).failureToDisplay : "N/A";
-                System.out.println(currentValue.testUrl.concat("\t").concat(currentValue.failureToDisplay).concat("\t").concat(referenceTestFailure));
+                System.out.println(currentValue.testUrl.concat("\t\"").concat(currentValue.failureToDisplay).concat("\"\t\"").concat(referenceTestFailure).concat("\""));
             }
         }
         System.out.println("-> Found ".concat(String.valueOf(differencesCount)).concat(" new test failures."));
