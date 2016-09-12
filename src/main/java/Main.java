@@ -25,6 +25,8 @@ import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import static org.apache.commons.lang3.StringUtils.isEmpty;
+
 /**
  * Created by Teo on 7/30/2016.
  * A tool to be run for a Jenkins job to search a text with regular expressions in build artifacts.
@@ -33,9 +35,6 @@ import java.util.function.Predicate;
  */
 public class Main {
 
-    private static final String buildsJsonPath = "$.builds[?]";
-    private static final String urlJsonPath = "$url";
-    private static final String buildNumberJsonPath = "number";
     private static final String runsNumberUrlJsonPath = "$.runs[?(@.number == %d)].url";
     private static final String KEYS_SEPARATOR = "#";
     static final String artifactsRelativePathJsonPath = "$.artifacts[*].relativePath";
@@ -149,7 +148,7 @@ public class Main {
      *                     toolArgs.searchedText the regular expression to match with the failure message
      * @return a list with the Jenkins links to the failed tests reports
      */
-    private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String buildNumber, String nodeUrl, ToolArgs toolArgs) {
+    private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String testName, String buildNumber, String nodeUrl, ToolArgs toolArgs) {
         List<String> matchedFailedTests = new ArrayList<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
         for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
@@ -158,10 +157,10 @@ public class Main {
             if (toolArgs.searchInJUnitReports && Main.findSearchedTextInContent(toolArgs.searchedText, message)) {
                 matchedFailedTests.add(testUrl);
             }
-            if (toolArgs.groupTestsFailures) {
+            if (toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
                 String stacktrace = failureElement.getTextContent();
                 String failureToCompare = stacktrace.concat(": ").concat(message.split("\\n")[0]);
-                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
+                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
             }
         }
         return new FailuresMatchResult(matchedFailedTests, testsFailures);
@@ -196,17 +195,18 @@ public class Main {
             Node testCaseNode = testCasesList.item(testCaseIndex);
             if (testCaseNode.getNodeType() == Node.ELEMENT_NODE) {
                 Element testCaseElement = (Element) testCaseNode;
+                String testName = testCaseElement.getAttribute("classname").concat(".").concat(testCaseElement.getAttribute("name"));
                 String testUrl = testCaseElement.getAttribute("classname").replace(".", "/").concat("/").concat(testCaseElement.getAttribute("name").replaceAll("[.\\\\()\\[\\]/-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
                 testUrl = testCount < 2 ? testUrl : testUrl.concat("_").concat(String.valueOf(testCount));
                 NodeList failureNodes = testCaseElement.getElementsByTagName("failure");
-                FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, buildNumber, nodeUrl, toolArgs);
+                FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, testName, buildNumber, nodeUrl, toolArgs);
                 matchedFailedTests.addAll(failuresMatchResult.matchedFailedTests);
                 testsFailures.putAll(failuresMatchResult.testsFailures);
                 NodeList errorNodes = testCaseElement.getElementsByTagName("error");
-                FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, buildNumber, nodeUrl, toolArgs);
+                FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, testName, buildNumber, nodeUrl, toolArgs);
                 matchedFailedTests.addAll(errorsMatchResult.matchedFailedTests);
                 testsFailures.putAll(errorsMatchResult.testsFailures);
             }
@@ -222,7 +222,7 @@ public class Main {
         return URLDecoder.decode(file, Charset.defaultCharset().name());
     }
 
-    public static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean backupJob, Boolean useBackup) {
+    private static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean backupJob, Boolean useBackup) {
         Set<Integer> backupBuilds = new HashSet<>();
         List<Integer> allAvailableBackupBuilds = new ArrayList<>();
         if (!backupJob && useBackup) {
@@ -275,48 +275,7 @@ public class Main {
         return backupBuilds;
     }
 
-    public static void main(String[] args) throws IOException {
-        // ======== GET AND PARSE THE ARGUMENTS VALUES ========
-        ToolArgs toolArgs = new ToolArgs();
-        toolArgs.jobUrl = System.getProperty("jobUrl");
-        if (StringUtils.isEmpty(toolArgs.jobUrl)) {
-            throw new IllegalArgumentException("-DjobUrl parameter cannot be empty. Please, provide a valid URL!");
-        }
-        System.out.println("Parameter jobUrl=" + toolArgs.jobUrl);
-        toolArgs.newUrlPrefix = System.getProperty("newUrlPrefix");
-        System.out.println("Parameter newUrlPrefix=" + toolArgs.newUrlPrefix);
-        toolArgs.newUrlPrefix = StringUtils.isEmpty(toolArgs.newUrlPrefix) ? toolArgs.jobUrl : toolArgs.newUrlPrefix;
-        toolArgs.searchInJUnitReports = StringUtils.isEmpty(System.getProperty("searchInJUnitReports")) ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
-        System.out.println("Parameter searchInJUnitReports=" + toolArgs.searchInJUnitReports);
-        toolArgs.threadPoolSizeString = System.getProperty("threadPoolSize");
-        toolArgs.threadPoolSize = StringUtils.isEmpty(System.getProperty("threadPoolSize")) ? 0 : Integer.parseInt(toolArgs.threadPoolSizeString);
-        System.out.println("Parameter threadPoolSize=" + toolArgs.threadPoolSize);
-        toolArgs.builds = parseBuilds(System.getProperty("builds"));
-        // in case there is no build number specified, search in the last job build artifacts
-        toolArgs.lastBuildsCount = toolArgs.builds.size() == 0 ? 1 : 0;
-        toolArgs.lastBuildsCount = StringUtils.isEmpty(System.getProperty("lastBuildsCount")) ? toolArgs.lastBuildsCount : Integer.parseInt(System.getProperty("lastBuildsCount"));
-        System.out.println("Parameter lastBuildsCount=" + toolArgs.lastBuildsCount);
-        toolArgs.artifactsFilters = System.getProperty("artifactsFilters") == null ? "" : System.getProperty("artifactsFilters");
-        System.out.println("Parameter artifactsFilters=" + toolArgs.artifactsFilters);
-        toolArgs.searchedText = System.getProperty("searchedText") == null ? "" : System.getProperty("searchedText");
-        System.out.println("Parameter searchedText=" + toolArgs.searchedText);
-        toolArgs.groupTestsFailures = StringUtils.isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
-        System.out.println("Parameter groupTestsFailures=" + toolArgs.groupTestsFailures);
-        // the maximum difference threshold as a percentage of difference distance between 2 failures and the maximum possible distance for the shorter failure
-        toolArgs.diffThreshold = StringUtils.isEmpty(System.getProperty("diffThreshold")) ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
-        System.out.println("Parameter diffThreshold=" + toolArgs.diffThreshold);
-        toolArgs.backupJob = StringUtils.isEmpty(System.getProperty("backupJob")) ? false : Boolean.valueOf(System.getProperty("backupJob"));
-        System.out.println("Parameter backupJob=" + toolArgs.backupJob);
-        toolArgs.useBackup = StringUtils.isEmpty(System.getProperty("useBackup")) ? false : Boolean.valueOf(System.getProperty("useBackup"));
-        System.out.println("Parameter useBackup=" + toolArgs.useBackup);
-        toolArgs.removeBackup = StringUtils.isEmpty(System.getProperty("removeBackup")) ? false : Boolean.valueOf(System.getProperty("removeBackup"));
-        System.out.println("Parameter removeBackup=" + toolArgs.removeBackup);
-        toolArgs.backupPath = System.getProperty("backupPath") == null ? "" : System.getProperty("backupPath");
-        System.out.println("Parameter backupPath=" + toolArgs.backupPath);
-
-        // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
-        String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json";
-        String jobResponse = getUrlResponse(apiJobUrl);
+    private static void computeBuilds(ToolArgs toolArgs, Set<Integer> backupBuilds, String jobResponse) throws IOException {
         if (toolArgs.useBackup || toolArgs.backupJob || toolArgs.removeBackup) {
             Validate.notEmpty(toolArgs.backupPath, "backupPath parameter is empty!");
             toolArgs.backupJobDirFile = new File(toolArgs.backupPath + File.separator + encodeFile(toolArgs.jobUrl));
@@ -329,28 +288,25 @@ public class Main {
                 lastNBuilds = lastNBuilds.subList(0, Math.min(toolArgs.lastBuildsCount, lastNBuilds.size()));
             }
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Exception when parsing the job api response for URL " + apiJobUrl + " : " + jobResponse, e);
+            throw new IllegalArgumentException("Exception when parsing the job api response for URL " + toolArgs.jobUrl + " : " + jobResponse, e);
         }
         toolArgs.builds.addAll(lastNBuilds);
-        Set<Integer> backupBuilds = updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup);
+        backupBuilds.addAll(updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup));
         List<Integer> sortedBuilds = new ArrayList<>(toolArgs.builds);
         sortedBuilds.sort(null);
         System.out.println("Parameter builds=" + sortedBuilds);
+    }
 
-        System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
-        ExecutorService executorService;
-        if (toolArgs.threadPoolSize <= 0) {
-            executorService = Executors.newWorkStealingPool();
-        } else {
-            executorService = Executors.newFixedThreadPool(toolArgs.threadPoolSize);
-        }
-        CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
-                executorService);
+    private static Integer submitBuildNodes(CompletionService<JenkinsNodeArtifactsFilter> completionService, ToolArgs toolArgs) throws IOException {
+        String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json");
+        String jobResponse = getUrlResponse(apiJobUrl);
+        Set<Integer> backupBuilds = new HashSet<>();
+        computeBuilds(toolArgs, backupBuilds, jobResponse);
         Integer processCount = 0;
         for (Integer buildNumber : toolArgs.builds) {
             List<String> nodesUrls;
-            File finishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber);
-            File unfinishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber + KEYS_SEPARATOR + "Unfinished");
+            File unfinishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)).concat(KEYS_SEPARATOR).concat("Unfinished"));
+            File finishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)));
             File backupBuildDirFile = finishedBackupBuildDirFile;
             if (toolArgs.backupJob) {
                 backupBuildDirFile = unfinishedBackupBuildDirFile;
@@ -362,7 +318,7 @@ public class Main {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
                 String buildApiResp;
                 try {
-                    buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix) + "/api/json");
+                    buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
                 } catch (IOException e) {
                     System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
                     continue;
@@ -382,54 +338,18 @@ public class Main {
             }
             processCount += nodesUrls.size();
         }
-        MultiValuedMap<String, String> buildNodesArtifacts = new ArrayListValuedHashMap<>();
-        MultiValuedMap<String, TestFailure> buildNodesFailures = new ArrayListValuedHashMap<>();
-        // now see if there are exceptions while computing the builds nodes and extract the results
-        for (int process = 0; process < processCount; process++) {
-            try {
-                JenkinsNodeArtifactsFilter completedProcess = completionService.take().get();
-                if (completedProcess.matchedArtifacts.size() > 0) {
-                    buildNodesArtifacts.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(completedProcess.nodeUrl), completedProcess.matchedArtifacts);
-                }
-                if (completedProcess.matchedFailedTests.size() > 0) {
-                    buildNodesArtifacts.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(completedProcess.nodeUrl), completedProcess.matchedFailedTests);
-                }
-                if (completedProcess.testsFailures.size() > 0) {
-                    for (Map.Entry<String, TestFailure> entry : completedProcess.testsFailures.entries()) {
-                        buildNodesFailures.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(entry.getKey()).concat(entry.getValue().failureToDisplay), entry.getValue());
-                    }
-                }
-            } catch (InterruptedException e) {
-                System.err.println("Got interrupt exception when processing nodes: " + e);
-                throw new IOException("Got interrupt exception when processing nodes.", e);
-            } catch (ExecutionException e) {
-                System.err.println("Got execution exception when processing nodes: " + e);
-                throw new IOException("Got execution exception when processing nodes.", e);
-            }
-        }
-        executorService.shutdown();
-        // remove "#Unfinished" from build directories names
-        for (Integer buildNumber : toolArgs.builds) {
-            File unfinishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber + KEYS_SEPARATOR + "Unfinished");
-            File finishedBackupBuildDirFile = new File(toolArgs.backupJobDirFile + File.separator + buildNumber);
-            if (toolArgs.backupJob) {
-                if (finishedBackupBuildDirFile.exists()) {
-                    FileUtils.deleteQuietly(finishedBackupBuildDirFile);
-                }
-                if (!unfinishedBackupBuildDirFile.renameTo(finishedBackupBuildDirFile)) {
-                    throw new IllegalStateException("Couldn't rename " + unfinishedBackupBuildDirFile + " directory to " + finishedBackupBuildDirFile);
-                }
-            }
-        }
+        return processCount;
+    }
 
-        // ======== PRINT THE NODES/TESTS MATCHING THE SEARCHED TEXT ========
+    private static void printTheNodesOrTestsMatchingSearchedText(ToolArgs toolArgs, MultiValuedMap<String, String> buildNodesArtifacts) {
+        System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
+        System.out.println("-> Found the searched text in ".concat(String.valueOf(buildNodesArtifacts.keySet().size())).concat(" build nodes."));
         // sort the results in ascending buildNumber_nodeUrl order
         Map.Entry<String, String>[] buildNodesArtifactsArray = buildNodesArtifacts.entries().toArray(new Map.Entry[0]);
         Arrays.parallelSort(buildNodesArtifactsArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
         String lastBuild = "";
         String lastNode = "";
 
-        System.out.println("-> Found the searched text in ".concat(String.valueOf(buildNodesArtifacts.keySet().size())).concat(" build nodes."));
         for (Map.Entry<String, String> buildNodeArtifact : buildNodesArtifactsArray) {
             String[] buildNodeTokens = buildNodeArtifact.getKey().split(KEYS_SEPARATOR);
             String currentBuild = buildNodeTokens[0];
@@ -448,28 +368,31 @@ public class Main {
                 System.out.println("\t\tArtifact relative path: ".concat(buildNodeArtifact.getValue()));
             }
         }
+    }
 
-        if (!toolArgs.groupTestsFailures) {
-            return;
+    private static Boolean failuresAreEqual(String failure1, String failure2, Double diffThreshold) {
+        Integer maxDistance = Math.min(failure1.length(), failure2.length());
+        if (maxDistance == 0) {
+            return true;
         }
+        int distanceThreshold = diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * diffThreshold) / 100);
+        double currentThreshold = (double) StringUtils.getLevenshteinDistance(failure1, failure2, distanceThreshold);
+        currentThreshold = currentThreshold == -1 ? maxDistance : currentThreshold;
+        currentThreshold = currentThreshold * 100 / maxDistance;
+        if (currentThreshold <= diffThreshold) {
+            return true;
+        }
+        return false;
+    }
 
-        // ======== PRINT THE COMMON FAILURES ========
+    private static void printTheCommonFailures(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesFailures) {
         System.out.println("\nGroup common failures from tests reports: ");
         MultiValuedMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
         for (Map.Entry<String, TestFailure> buildNodeFailure : buildNodesFailures.entries()) {
             String failureKey = buildNodeFailure.getKey();
             String groupedBuildNodeFailureKey = null;
             for (Map.Entry<String, TestFailure> groupedBuildNodeFailure : groupedBuildNodesFailures.entries()) {
-                Integer maxDistance = Math.min(buildNodeFailure.getValue().failureToCompare.length(), groupedBuildNodeFailure.getValue().failureToCompare.length());
-                if (maxDistance == 0) {
-                    groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
-                    break;
-                }
-                int distanceThreshold = toolArgs.diffThreshold < 0 ? 0 : (int) Math.ceil((maxDistance * toolArgs.diffThreshold) / 100);
-                double currentThreshold = (double) StringUtils.getLevenshteinDistance(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, distanceThreshold);
-                currentThreshold = currentThreshold == -1 ? maxDistance : currentThreshold;
-                currentThreshold = currentThreshold * 100 / maxDistance;
-                if (currentThreshold <= toolArgs.diffThreshold) {
+                if (failuresAreEqual(buildNodeFailure.getValue().failureToCompare, groupedBuildNodeFailure.getValue().failureToCompare, toolArgs.diffThreshold)) {
                     groupedBuildNodeFailureKey = groupedBuildNodeFailure.getKey();
                     break;
                 }
@@ -496,7 +419,7 @@ public class Main {
         Map.Entry<String, TestFailure>[] groupedBuildFailuresArray = groupedBuildFailures.entries().toArray(new Map.Entry[0]);
         Arrays.parallelSort(groupedBuildFailuresArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
         String lastKey = "";
-        lastBuild = "";
+        String lastBuild = "";
         for (Map.Entry<String, TestFailure> buildFailure : groupedBuildFailuresArray) {
             String currentKey = buildFailure.getKey();
             String currentBuild = buildFailure.getValue().buildNumber;
@@ -511,6 +434,172 @@ public class Main {
                 System.out.println("\t\tBuild: " + currentBuild);
             }
             System.out.println("\t\t\tFailed test report: ".concat(buildFailure.getValue().testUrl));
+        }
+    }
+
+    private static void printTheTestFailuresDifference(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesTestFailures, MultiValuedMap<String, TestFailure> buildNodesTestFailures2) {
+        System.out.println("\nShow the test failures differences between 2 builds: ");
+        System.out.println("-> Found ".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat(" instead of ").concat(String.valueOf(buildNodesTestFailures2.keySet().size())).concat(" failed tests."));
+        // sort the results by testName in ascending order
+        Map.Entry<String, TestFailure>[] buildNodesTestFailuresArray = buildNodesTestFailures.entries().toArray(new Map.Entry[0]);
+        Arrays.parallelSort(buildNodesTestFailuresArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
+
+        // compare the tests failures and print the difference
+        ArrayListValuedHashMap<String, TestFailure> groupedBuildFailures = new ArrayListValuedHashMap<>();
+        String failuresCountFormat = "%0".concat(String.valueOf(String.valueOf(buildNodesTestFailures.size()).length())).concat("d");
+        System.out.println("\n#TestUrl\t#Failure\t#ReferenceFailure");
+        int differencesCount = 0;
+        for (Map.Entry<String, TestFailure> buildTestFailure : buildNodesTestFailuresArray) {
+            String currentKey = buildTestFailure.getKey();
+            List<TestFailure> referenceTestFailures = (List<TestFailure>) buildNodesTestFailures2.get(currentKey);
+            boolean failureFound = false;
+            for (TestFailure testFailure: referenceTestFailures) {
+                if (failuresAreEqual(buildTestFailure.getValue().failureToCompare, testFailure.failureToCompare, toolArgs.diffThreshold)) {
+                    failureFound = true;
+                    break;
+                }
+            }
+            if (!failureFound) {
+                differencesCount++;
+                TestFailure currentValue = buildTestFailure.getValue();
+                String referenceTestFailure = referenceTestFailures.size() > 0 ? referenceTestFailures.get(0).failureToDisplay : "N/A";
+                System.out.println(currentValue.testUrl.concat("\t\"").concat(currentValue.failureToDisplay).concat("\"\t\"").concat(referenceTestFailure).concat("\""));
+            }
+        }
+        System.out.println("-> Found ".concat(String.valueOf(differencesCount)).concat(" new test failures."));
+    }
+
+    public static void main(String[] args) throws IOException, CloneNotSupportedException {
+        // ======== GET AND PARSE THE ARGUMENTS VALUES ========
+        ToolArgs toolArgs = new ToolArgs();
+        toolArgs.jobUrl = System.getProperty("jobUrl");
+        if (isEmpty(toolArgs.jobUrl)) {
+            throw new IllegalArgumentException("-DjobUrl parameter cannot be empty. Please, provide a valid URL!");
+        }
+        System.out.println("Parameter jobUrl=" + toolArgs.jobUrl);
+        toolArgs.newUrlPrefix = System.getProperty("newUrlPrefix");
+        System.out.println("Parameter newUrlPrefix=" + toolArgs.newUrlPrefix);
+        toolArgs.newUrlPrefix = isEmpty(toolArgs.newUrlPrefix) ? toolArgs.jobUrl : toolArgs.newUrlPrefix;
+        toolArgs.jobUrl2 = isEmpty(System.getProperty("jobUrl2")) ? toolArgs.jobUrl : System.getProperty("jobUrl2");
+        System.out.println("Parameter jobUrl2=" + toolArgs.jobUrl2);
+        toolArgs.newUrlPrefix2 = System.getProperty("newUrlPrefix2");
+        toolArgs.newUrlPrefix2 = isEmpty(toolArgs.newUrlPrefix2) ? toolArgs.jobUrl2 : toolArgs.newUrlPrefix2;
+        System.out.println("Parameter newUrlPrefix2=" + toolArgs.newUrlPrefix2);
+        toolArgs.searchInJUnitReports = isEmpty(System.getProperty("searchInJUnitReports")) ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
+        System.out.println("Parameter searchInJUnitReports=" + toolArgs.searchInJUnitReports);
+        toolArgs.threadPoolSizeString = System.getProperty("threadPoolSize");
+        toolArgs.threadPoolSize = isEmpty(System.getProperty("threadPoolSize")) ? 0 : Integer.parseInt(toolArgs.threadPoolSizeString);
+        System.out.println("Parameter threadPoolSize=" + toolArgs.threadPoolSize);
+        toolArgs.builds = parseBuilds(System.getProperty("builds"));
+        // in case there is no build number specified, search in the last job build artifacts
+        toolArgs.lastBuildsCount = toolArgs.builds.size() == 0 ? 1 : 0;
+        toolArgs.lastBuildsCount = isEmpty(System.getProperty("lastBuildsCount")) ? toolArgs.lastBuildsCount : Integer.parseInt(System.getProperty("lastBuildsCount"));
+        System.out.println("Parameter lastBuildsCount=" + toolArgs.lastBuildsCount);
+        toolArgs.artifactsFilters = System.getProperty("artifactsFilters") == null ? "" : System.getProperty("artifactsFilters");
+        System.out.println("Parameter artifactsFilters=" + toolArgs.artifactsFilters);
+        toolArgs.searchedText = System.getProperty("searchedText") == null ? "" : System.getProperty("searchedText");
+        System.out.println("Parameter searchedText=" + toolArgs.searchedText);
+        toolArgs.groupTestsFailures = isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
+        System.out.println("Parameter groupTestsFailures=" + toolArgs.groupTestsFailures);
+        // the maximum difference threshold as a percentage of difference distance between 2 failures and the maximum possible distance for the shorter failure
+        toolArgs.diffThreshold = isEmpty(System.getProperty("diffThreshold")) ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
+        System.out.println("Parameter diffThreshold=" + toolArgs.diffThreshold);
+        toolArgs.backupJob = isEmpty(System.getProperty("backupJob")) ? false : Boolean.valueOf(System.getProperty("backupJob"));
+        System.out.println("Parameter backupJob=" + toolArgs.backupJob);
+        toolArgs.useBackup = isEmpty(System.getProperty("useBackup")) ? false : Boolean.valueOf(System.getProperty("useBackup"));
+        System.out.println("Parameter useBackup=" + toolArgs.useBackup);
+        toolArgs.removeBackup = isEmpty(System.getProperty("removeBackup")) ? false : Boolean.valueOf(System.getProperty("removeBackup"));
+        System.out.println("Parameter removeBackup=" + toolArgs.removeBackup);
+        toolArgs.backupPath = System.getProperty("backupPath") == null ? "" : System.getProperty("backupPath");
+        System.out.println("Parameter backupPath=" + toolArgs.backupPath);
+        toolArgs.referenceBuild = isEmpty(System.getProperty("referenceBuild")) ? null : Integer.valueOf(System.getProperty("referenceBuild"));
+        System.out.println("Parameter referenceBuild=" + toolArgs.referenceBuild);
+        toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
+        System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
+        ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
+        toolArgs2.jobUrl = toolArgs.jobUrl2;
+        toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
+        toolArgs2.builds = toolArgs2.referenceBuild == null ? new HashSet<>() : new HashSet<>(Arrays.asList(toolArgs2.referenceBuild));
+        toolArgs2.lastBuildsCount = 0;
+
+        // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
+        ExecutorService executorService;
+        if (toolArgs.threadPoolSize <= 0) {
+            executorService = Executors.newWorkStealingPool();
+        } else {
+            executorService = Executors.newFixedThreadPool(toolArgs.threadPoolSize);
+        }
+        CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
+                executorService);
+        Integer processCount = submitBuildNodes(completionService, toolArgs);
+        if (toolArgs.showTestsDifferences) {
+            // submit also the build nodes for jobUrl2, with build @referenceBuild
+            processCount += submitBuildNodes(completionService, toolArgs2);
+        }
+
+        MultiValuedMap<String, String> buildNodesArtifacts = new ArrayListValuedHashMap<>();
+        MultiValuedMap<String, TestFailure> buildNodesFailures = new ArrayListValuedHashMap<>();
+        MultiValuedMap<String, TestFailure> buildNodesTestFailures = new ArrayListValuedHashMap<>();
+        MultiValuedMap<String, TestFailure> buildNodesTestFailures2 = new ArrayListValuedHashMap<>();
+        // now see if there are exceptions while computing the builds nodes and extract the results
+        for (int process = 0; process < processCount; process++) {
+            try {
+                JenkinsNodeArtifactsFilter completedProcess = completionService.take().get();
+                if (completedProcess.matchedArtifacts.size() > 0) {
+                    buildNodesArtifacts.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(completedProcess.nodeUrl), completedProcess.matchedArtifacts);
+                }
+                if (completedProcess.matchedFailedTests.size() > 0) {
+                    buildNodesArtifacts.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(completedProcess.nodeUrl), completedProcess.matchedFailedTests);
+                }
+                if (completedProcess.testsFailures.size() > 0) {
+                    if (toolArgs.showTestsDifferences) {
+                        for (Map.Entry<String, TestFailure> entry : completedProcess.testsFailures.entries()) {
+                            if (completedProcess.toolArgs == toolArgs) {
+                                buildNodesTestFailures.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace(entry.getValue().buildNumber.concat("/"), ""), entry.getValue());
+                            } else {
+                                buildNodesTestFailures2.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace(entry.getValue().buildNumber.concat("/"), ""), entry.getValue());
+                            }
+                        }
+                    } else {
+                        for (Map.Entry<String, TestFailure> entry : completedProcess.testsFailures.entries()) {
+                            buildNodesFailures.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(entry.getKey()).concat(entry.getValue().failureToDisplay), entry.getValue());
+                        }
+                    }
+                }
+            } catch (InterruptedException e) {
+                System.err.println("Got interrupt exception when processing nodes: " + e);
+                throw new IOException("Got interrupt exception when processing nodes.", e);
+            } catch (ExecutionException e) {
+                System.err.println("Got execution exception when processing nodes: " + e);
+                throw new IOException("Got execution exception when processing nodes.", e);
+            }
+        }
+        executorService.shutdown();
+        // remove "#Unfinished" from build directories names
+        for (Integer buildNumber : toolArgs.builds) {
+            File unfinishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)).concat(KEYS_SEPARATOR).concat("Unfinished"));
+            File finishedBackupBuildDirFile = new File(String.valueOf(toolArgs.backupJobDirFile).concat(File.separator).concat(String.valueOf(buildNumber)));
+            if (toolArgs.backupJob) {
+                if (finishedBackupBuildDirFile.exists()) {
+                    FileUtils.deleteQuietly(finishedBackupBuildDirFile);
+                }
+                if (!unfinishedBackupBuildDirFile.renameTo(finishedBackupBuildDirFile)) {
+                    throw new IllegalStateException("Couldn't rename " + unfinishedBackupBuildDirFile + " directory to " + finishedBackupBuildDirFile);
+                }
+            }
+        }
+
+        // ======== PRINT THE NODES/TESTS MATCHING THE SEARCHED TEXT ========
+        printTheNodesOrTestsMatchingSearchedText(toolArgs, buildNodesArtifacts);
+
+        if (toolArgs.groupTestsFailures) {
+            // ======== PRINT THE COMMON FAILURES ========
+            printTheCommonFailures(toolArgs, buildNodesFailures);
+        }
+
+        if (toolArgs.showTestsDifferences) {
+            // ======== PRINT THE TESTS FAILURES DIFFERENCE BETWEEN 2 BUILdS ========
+            printTheTestFailuresDifference(toolArgs, buildNodesTestFailures, buildNodesTestFailures2);
         }
     }
 }
