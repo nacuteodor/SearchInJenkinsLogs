@@ -22,6 +22,9 @@ java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-
 
 java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-proxy.com/job/JobName/"  -DartifactsFilters=".*xml " -DuseBackup=true  -DbackupPath=$backupPath -DjobUrl2="https://jenkins.com/job/$ReferenceJobName/" -DnewUrlPrefix2="http://jenkins-proxy.com/job/$ReferenceJobName/" -Dbuilds=$BuildToCompare -DreferenceBuild=$ReferenceBuild -DdiffThreshold=$DiffThreshold -DshowTestsDifferences=true -cp searchinjenkinslogs.jar Main
 
+- you could use it to find crashes or exceptions that appear in the app logs while running the UI tests. 
+For iOS app system logs, you could use this regular expression: -DsearchedText="(.\*Terminating app due to uncaught exception.\*)|(.\*${AppName}\\[[0-9]\*\\]: fatal error:.\*)" , where ${AppName} is the name of the tested iOS app.
+
 ## IDE:
 Easy to integrate the project with Intellij, JDK 8
 
