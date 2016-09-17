@@ -532,7 +532,7 @@ public class Main {
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = submitBuildNodes(completionService, toolArgs);
-        if (toolArgs.showTestsDifferences) {
+        if (toolArgs.referenceBuild != null) {
             // submit also the build nodes for jobUrl2, with build @referenceBuild
             processCount += submitBuildNodes(completionService, toolArgs2);
         }
