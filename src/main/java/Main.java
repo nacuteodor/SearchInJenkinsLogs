@@ -223,6 +223,7 @@ public class Main {
     }
 
     private static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean backupJob, Boolean useBackup) {
+        System.out.println("updatedBuildsAndGetBackupBuilds: " + builds);
         Set<Integer> backupBuilds = new HashSet<>();
         List<Integer> allAvailableBackupBuilds = new ArrayList<>();
         if (!backupJob && useBackup) {
