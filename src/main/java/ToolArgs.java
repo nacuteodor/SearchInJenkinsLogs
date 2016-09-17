@@ -23,7 +23,7 @@ public class ToolArgs implements Cloneable {
     Boolean removeBackup;
     String backupPath;
     File backupJobDirFile;
-    Integer referenceBuild;
+    Set<Integer> referenceBuilds;
     Boolean showTestsDifferences;
 
     @Override

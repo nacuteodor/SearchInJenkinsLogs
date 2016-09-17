@@ -512,14 +512,14 @@ public class Main {
         System.out.println("Parameter removeBackup=" + toolArgs.removeBackup);
         toolArgs.backupPath = System.getProperty("backupPath") == null ? "" : System.getProperty("backupPath");
         System.out.println("Parameter backupPath=" + toolArgs.backupPath);
-        toolArgs.referenceBuild = isEmpty(System.getProperty("referenceBuild")) ? null : Integer.valueOf(System.getProperty("referenceBuild"));
-        System.out.println("Parameter referenceBuild=" + toolArgs.referenceBuild);
+        toolArgs.referenceBuilds = parseBuilds(System.getProperty("referenceBuilds"));
+        System.out.println("Parameter referenceBuilds=" + toolArgs.referenceBuilds);
         toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
         System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
         toolArgs2.jobUrl = toolArgs.jobUrl2;
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
-        toolArgs2.builds = toolArgs2.referenceBuild == null ? new HashSet<>() : new HashSet<>(Arrays.asList(toolArgs2.referenceBuild));
+        toolArgs2.builds = toolArgs2.referenceBuilds;
         toolArgs2.lastBuildsCount = 0;
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
@@ -532,7 +532,7 @@ public class Main {
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = submitBuildNodes(completionService, toolArgs);
-        if (toolArgs.referenceBuild != null) {
+        if (!toolArgs.referenceBuilds.isEmpty()) {
             // submit also the build nodes for jobUrl2, with build @referenceBuild
             processCount += submitBuildNodes(completionService, toolArgs2);
         }
@@ -555,9 +555,9 @@ public class Main {
                     if (toolArgs.showTestsDifferences) {
                         for (Map.Entry<String, TestFailure> entry : completedProcess.testsFailures.entries()) {
                             if (completedProcess.toolArgs == toolArgs) {
-                                buildNodesTestFailures.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace(entry.getValue().buildNumber.concat("/"), ""), entry.getValue());
+                                buildNodesTestFailures.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace("/".concat(entry.getValue().buildNumber).concat("/"), "/"), entry.getValue());
                             } else {
-                                buildNodesTestFailures2.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace(entry.getValue().buildNumber.concat("/"), ""), entry.getValue());
+                                buildNodesTestFailures2.putAll(entry.getValue().testUrl.replace(toolArgs.jobUrl, "").replace("/".concat(entry.getValue().buildNumber).concat("/"), "/"), entry.getValue());
                             }
                         }
                     } else {
