@@ -258,7 +258,6 @@ public class Main {
         } else {
             builds.retainAll(allAvailableBuildsList);
             backupBuilds.retainAll(allAvailableBackupBuilds);
-            System.out.println("builds.retainAll(allAvailableBuildsList): " + allAvailableBuildsList);
         }
         // remove the last available job build from backup builds list, as this may not be a finished build
         if (allAvailableBuildsList.size() > 0) {
@@ -272,9 +271,7 @@ public class Main {
                 backupBuilds.addAll(otherBuildsFromBackup);
             }
         }
-        System.out.println("builds.addAll(backupBuilds): " + builds);
         builds.addAll(backupBuilds);
-        System.out.println("after builds.addAll(backupBuilds): " + builds);
         return backupBuilds;
     }
 
