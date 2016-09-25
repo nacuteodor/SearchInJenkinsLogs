@@ -28,6 +28,9 @@ For iOS app system logs, you could use this regular expression: -DsearchedText="
 ## IDE:
 Easy to integrate the project with Intellij, JDK 8
 
+## TODO:
+Generate a HTML report.
+
 ## Please, give a star to this project if it helps you.
 
 ## Contact
