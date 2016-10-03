@@ -184,8 +184,7 @@ public class Main {
         List<String> matchedFailedTests = new ArrayList<>();
         Map<String, Integer> testsCount = new HashedMap<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
-        DocumentBuilderFactory dbFactory
-                = DocumentBuilderFactory.newInstance();
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
         jUnitReportXml = encodeNewLineCharInFailureElements(jUnitReportXml);
         Document doc = dBuilder.parse(new ByteArrayInputStream(jUnitReportXml.getBytes()));
@@ -559,7 +558,8 @@ public class Main {
                                 buildNodesTestFailures2.putAll(key, entry.getValue());
                             }
                         }
-                    } else {
+                    }
+                    if (toolArgs.groupTestsFailures) {
                         for (Map.Entry<String, TestFailure> entry : completedProcess.testsFailures.entries()) {
                             buildNodesFailures.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(entry.getKey()).concat(entry.getValue().failureToDisplay), entry.getValue());
                         }
