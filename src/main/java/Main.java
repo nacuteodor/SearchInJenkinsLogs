@@ -511,13 +511,15 @@ public class Main {
         System.out.println("Parameter backupPath=" + toolArgs.backupPath);
         toolArgs.referenceBuilds = parseBuilds(System.getProperty("referenceBuilds"));
         System.out.println("Parameter referenceBuilds=" + toolArgs.referenceBuilds);
+        toolArgs.lastReferenceBuildsCount = isEmpty(System.getProperty("lastReferenceBuildsCount")) ? 0 : Integer.parseInt(System.getProperty("lastReferenceBuildsCount"));
+        System.out.println("Parameter lastReferenceBuildsCount=" + toolArgs.lastReferenceBuildsCount);
         toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
         System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
         toolArgs2.jobUrl = toolArgs.jobUrl2;
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
         toolArgs2.builds = toolArgs2.referenceBuilds;
-        toolArgs2.lastBuildsCount = 0;
+        toolArgs2.lastBuildsCount = toolArgs.lastReferenceBuildsCount;
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
         ExecutorService executorService;
@@ -529,7 +531,7 @@ public class Main {
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = submitBuildNodes(completionService, toolArgs);
-        if (!toolArgs.referenceBuilds.isEmpty()) {
+        if (!toolArgs.referenceBuilds.isEmpty() || toolArgs.lastReferenceBuildsCount > 0) {
             // submit also the build nodes for jobUrl2, with build @referenceBuild
             processCount += submitBuildNodes(completionService, toolArgs2);
         }

@@ -24,6 +24,7 @@ public class ToolArgs implements Cloneable {
     String backupPath;
     File backupJobDirFile;
     Set<Integer> referenceBuilds;
+    Integer lastReferenceBuildsCount;
     Boolean showTestsDifferences;
 
     @Override
