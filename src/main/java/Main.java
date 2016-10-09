@@ -40,6 +40,7 @@ public class Main {
     static final String artifactsRelativePathJsonPath = "$.artifacts[*].relativePath";
     static final String buildsNumberJsonPath = "$.builds[*].number";
     static final String buildsNumberUrlJsonPath = "$.builds[?(@.number == %d)].url";
+    static final String buildParamsJsonPath = "$.actions[*].parameters[*]";
 
     static String getUrlResponse(String urlString) throws IOException {
         URL url = new URL(urlString);
@@ -84,6 +85,44 @@ public class Main {
             }
         }
         return buildsSet;
+    }
+
+    /**
+     * Used for parsing the -DBuildParamsFilter parameter values into a Map
+     */
+    private static Map<String, String> parseBuildParamsFilter(String params) {
+        Map<String, String> buildParamsFilter = new HashMap<>();
+        String[] keyValueMap = params.split(";");
+        for (String keyValue: keyValueMap) {
+            String[] tokens = keyValue.split("=");
+            String key = tokens[0];
+            String value = tokens.length > 1 ? tokens[1] : "";
+            buildParamsFilter.put(key, value);
+        }
+        return buildParamsFilter;
+    }
+
+    /**
+     * @return true if @buildParams matches all parameter values from @buildParamsFilter map
+     */
+    private static boolean matchesBuildParams(List<Map<String, String>> buildParams, Map<String, String> buildParamsFilter) {
+        boolean matches = true;
+        for (Map.Entry<String, String> buildParamFilter: buildParamsFilter.entrySet()) {
+            String key = buildParamFilter.getKey();
+            String value = buildParamFilter.getValue();
+            boolean found = false;
+            for (Map<String, String> buildParam: buildParams) {
+                if (buildParam.get("name").equals(key) && value.equals(buildParam.get("value"))) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                matches = false;
+                break;
+            }
+        }
+        return matches;
     }
 
     static Boolean findSearchedTextInContent(String searchedText, String content) {
@@ -311,17 +350,26 @@ public class Main {
                 backupBuildDirFile = unfinishedBackupBuildDirFile;
             }
             Boolean useBackup = backupBuilds.contains(buildNumber);
-            if (useBackup) {
-                nodesUrls = Arrays.asList(new FileHelper().getDirFilesList(backupBuildDirFile.getAbsolutePath(), "", false));
-            } else {
+            String buildApiResp = null;
+            if (!useBackup || toolArgs.buildParamsFilter.size() > 0) {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
-                String buildApiResp;
                 try {
                     buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
                 } catch (IOException e) {
                     System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
                     continue;
                 }
+            }
+            if (toolArgs.buildParamsFilter.size() > 0) {
+                useBackup = false;
+                List<Map<String, String>> buildParams = JsonPath.read(buildApiResp, buildParamsJsonPath);
+                if (!matchesBuildParams(buildParams, toolArgs.buildParamsFilter)) {
+                    continue;
+                }
+            }
+            if (useBackup) {
+                nodesUrls = Arrays.asList(new FileHelper().getDirFilesList(backupBuildDirFile.getAbsolutePath(), "", false));
+            } else {
                 nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
             }
             if (!useBackup && (toolArgs.removeBackup || toolArgs.backupJob)) {
@@ -494,6 +542,8 @@ public class Main {
         System.out.println("Parameter lastBuildsCount=" + toolArgs.lastBuildsCount);
         toolArgs.artifactsFilters = System.getProperty("artifactsFilters") == null ? "" : System.getProperty("artifactsFilters");
         System.out.println("Parameter artifactsFilters=" + toolArgs.artifactsFilters);
+        toolArgs.buildParamsFilter = parseBuildParamsFilter(System.getProperty("buildParamsFilter") == null ? "" : System.getProperty("buildParamsFilter"));
+        System.out.println("Parameter buildParamsFilter=" + toolArgs.buildParamsFilter);
         toolArgs.searchedText = System.getProperty("searchedText") == null ? "" : System.getProperty("searchedText");
         System.out.println("Parameter searchedText=" + toolArgs.searchedText);
         toolArgs.groupTestsFailures = isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
@@ -584,7 +634,7 @@ public class Main {
                 if (finishedBackupBuildDirFile.exists()) {
                     FileUtils.deleteQuietly(finishedBackupBuildDirFile);
                 }
-                if (!unfinishedBackupBuildDirFile.renameTo(finishedBackupBuildDirFile)) {
+                if (unfinishedBackupBuildDirFile.exists() && !unfinishedBackupBuildDirFile.renameTo(finishedBackupBuildDirFile)) {
                     throw new IllegalStateException("Couldn't rename " + unfinishedBackupBuildDirFile + " directory to " + finishedBackupBuildDirFile);
                 }
             }

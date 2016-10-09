@@ -1,4 +1,5 @@
 import java.io.File;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -26,6 +27,7 @@ public class ToolArgs implements Cloneable {
     Set<Integer> referenceBuilds;
     Integer lastReferenceBuildsCount;
     Boolean showTestsDifferences;
+    Map<String, String> buildParamsFilter;
 
     @Override
     public Object clone() throws CloneNotSupportedException {
