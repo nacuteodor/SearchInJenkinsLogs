@@ -77,8 +77,6 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
             }
             artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
             artifactUrlPrefix = toolArgs.newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(nodeUrl.replace(toolArgs.jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
-            System.out.println("artifactUrlPrefix " + artifactUrlPrefix);
-            System.out.println("nodeUrl " + nodeUrl);
         }
         for (String artifactRelativePath : artifactsRelativePaths) {
             if (!Main.artifactUrlMatchesFilters(useBackup ? Main.decodeFile(artifactRelativePath) : artifactRelativePath, toolArgs.artifactsFilters)) {
