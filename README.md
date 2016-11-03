@@ -7,7 +7,7 @@ A tool to be run for a Jenkins job to search a text with regular expressions in 
 - another important feature is that setting -DgroupTestsFailures=true will find the common similar tests failures with a maximum difference threshold set with -DdiffThreshold argument. 
 - showing the failed tests difference, for the build specified in -Dbuilds, is also possible setting -DshowTestsDifferences=true and -DreferenceBuilds=$BuildNumbers, the builds with the tests results to be compared with. The results will contain the failed test URL, the failure message and the reference build failure message. 
 - the job builds where to search can be specified as an enumeration and range using -Dbuilds property, or the last builds using -DlastBuildsCount property
-- the artifacts files can be filter using regular expressions and more filters could be applied separated with commas ","
+- the artifacts files can be filtered using regular expressions and more filters could be applied separated with commas ","
 - parallel processing, searches the regular expression for each build node in a separated thread for a better performance
 - the thread count can be specified in -DthreadPoolSize property
 - has disk backup support for saving artifacts for the Jenkins job (-DbackupJob=true and -DbackupPath=$path). Also, you can search in backup files instead of querying Jenkins API (-DuseBackup=true and -DbackupPath=$path), or remove the backup for specified builds (-DremoveBackup=true and -DbackupPath=$path)
