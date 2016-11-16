@@ -1,9 +1,37 @@
 import com.jayway.jsonpath.JsonPath;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.map.HashedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 import org.w3c.dom.Document;
@@ -11,19 +39,6 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import java.io.*;
-import java.net.URL;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.nio.charset.Charset;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.function.Function;
-import java.util.function.Predicate;
 
 import static org.apache.commons.lang3.StringUtils.isEmpty;
 
@@ -178,6 +193,10 @@ public class Main {
         return node.concat("testReport/junit/").concat(test);
     }
 
+    private static String buildArtifactLink(String node, String artifactPath) {
+        return node.concat("artifact/").concat(artifactPath);
+    }
+
     /**
      * Matches the @searchedText in each test failure for a test and return a list with the Jenkins links to the failed tests reports
      *
@@ -226,6 +245,10 @@ public class Main {
         List<String> matchedFailedTests = new ArrayList<>();
         Map<String, Integer> testsCount = new HashedMap<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
+        // if the JUnit report is empty we cannot parse it
+        if (jUnitReportXml.isEmpty()) {
+            return new FailuresMatchResult(matchedFailedTests, testsFailures);
+        }
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
         jUnitReportXml = encodeNewLineCharInFailureElements(jUnitReportXml);
@@ -393,32 +416,47 @@ public class Main {
     }
 
     private static void printTheNodesOrTestsMatchingSearchedText(ToolArgs toolArgs, MultiValuedMap<String, String> buildNodesArtifacts) {
+        toolArgs.htmlGenerator.addNewLine().addParagraph("Print the nodes matching the searched text \"" + StringEscapeUtils.escapeHtml(toolArgs.searchedText) + "\" in artifacts for ".concat(toolArgs.jobUrl).concat(": "));
         System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
-        System.out.println("-> Found the searched text in ".concat(String.valueOf(buildNodesArtifacts.keySet().size())).concat(" build nodes."));
+        toolArgs.htmlGenerator.startTable();
+        toolArgs.htmlGenerator.startRow().addColumnValue("Build", true).addColumnValue("Nodes", true).addColumnValue("Artifacts", true).endRow();
+        System.out.println("-> Found the searched text in <b>".concat(String.valueOf(buildNodesArtifacts.keySet().size())).concat("<\b> build nodes."));
         // sort the results in ascending buildNumber_nodeUrl order
         Map.Entry<String, String>[] buildNodesArtifactsArray = buildNodesArtifacts.entries().toArray(new Map.Entry[0]);
         Arrays.parallelSort(buildNodesArtifactsArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
         String lastBuild = "";
         String lastNode = "";
-
+        String artifactsColumnValue = "";
         for (Map.Entry<String, String> buildNodeArtifact : buildNodesArtifactsArray) {
             String[] buildNodeTokens = buildNodeArtifact.getKey().split(KEYS_SEPARATOR);
             String currentBuild = buildNodeTokens[0];
             String currentNode = buildNodeTokens[1];
+            boolean isDifferentNode = !currentNode.equals(lastNode);
+            if (isDifferentNode && !artifactsColumnValue.isEmpty()) {
+                toolArgs.htmlGenerator.addColumnValue(artifactsColumnValue).endRow();
+            }
             if (!currentBuild.equals(lastBuild)) {
                 lastBuild = currentBuild;
+                toolArgs.htmlGenerator.startRow().addColumnValue("#".concat(currentBuild)).addColumnValue("").addColumnValue("").endRow();
                 System.out.println("\nBuild: ".concat(currentBuild));
             }
-            if (!currentNode.equals(lastNode)) {
+
+            if (isDifferentNode) {
                 lastNode = currentNode;
+                toolArgs.htmlGenerator.startRow().addColumnValue("").addColumnValue(currentNode.replace(toolArgs.jobUrl, ""), currentNode);
+                artifactsColumnValue = "";
                 System.out.println("\tNode: ".concat(currentNode));
             }
             if (toolArgs.searchInJUnitReports) {
+                artifactsColumnValue += new HtmlGenerator().addLink(buildNodeArtifact.getValue(), buildTestReportLink(currentNode, buildNodeArtifact.getValue())).addNewLine().getContent();
                 System.out.println("\t\tFailed test report: ".concat(buildTestReportLink(currentNode, buildNodeArtifact.getValue())));
             } else {
+                artifactsColumnValue += new HtmlGenerator().addLink(buildNodeArtifact.getValue(), buildArtifactLink(currentNode, buildNodeArtifact.getValue())).addNewLine().getContent();
                 System.out.println("\t\tArtifact relative path: ".concat(buildNodeArtifact.getValue()));
             }
         }
+        toolArgs.htmlGenerator.addColumnValue(artifactsColumnValue).endRow();
+        toolArgs.htmlGenerator.startRow().addColumnValue("Nodes count: ".concat(String.valueOf(buildNodesArtifacts.keySet().size())), true).addColumnValue("").addColumnValue("").endRow().endTable();;
     }
 
     private static Boolean failuresAreEqual(String failure1, String failure2, Double diffThreshold) {
@@ -437,6 +475,7 @@ public class Main {
     }
 
     private static void printTheCommonFailures(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesFailures) {
+        toolArgs.htmlGenerator.addNewLine().addParagraph("Group common failures from tests reports for ".concat(toolArgs.jobUrl).concat(", ").concat(toolArgs.jobUrl2 == toolArgs.jobUrl ? "" : toolArgs.jobUrl2).concat(": "));
         System.out.println("\nGroup common failures from tests reports: ");
         MultiValuedMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
         for (Map.Entry<String, TestFailure> buildNodeFailure : buildNodesFailures.entries()) {
@@ -464,11 +503,13 @@ public class Main {
             Arrays.parallelSort(valuesArray, (o1, o2) -> o1.testUrl.compareTo(o2.testUrl));
             groupedBuildFailures.putAll(String.format(failuresCountFormat, values.size()).concat(KEYS_SEPARATOR).concat(key), Arrays.asList(valuesArray));
         }
+        toolArgs.htmlGenerator.addParagraph("-> Found <b>".concat(String.valueOf(groupedBuildFailures.keySet().size())).concat("</b> common failures."));
         System.out.println("-> Found ".concat(String.valueOf(groupedBuildFailures.keySet().size())).concat(" common failures."));
+        toolArgs.htmlGenerator.startTable().startRow().addColumnValue("Failure", true).addColumnValue("Frequency", true).addColumnValue("Test Name/Link", true).addColumnValue("Build", true).endRow();
 
         // sort the results by count#failure#firstTestUrl#buildNumber ascending order
         Map.Entry<String, TestFailure>[] groupedBuildFailuresArray = groupedBuildFailures.entries().toArray(new Map.Entry[0]);
-        Arrays.parallelSort(groupedBuildFailuresArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
+        Arrays.parallelSort(groupedBuildFailuresArray, (o1, o2) -> o2.getKey().compareTo(o1.getKey()));
         String lastKey = "";
         String lastBuild = "";
         for (Map.Entry<String, TestFailure> buildFailure : groupedBuildFailuresArray) {
@@ -477,6 +518,7 @@ public class Main {
             if (!currentKey.equals(lastKey)) {
                 lastKey = currentKey;
                 lastBuild = "";
+                toolArgs.htmlGenerator.startRow().addColumnValue(StringEscapeUtils.escapeHtml(buildFailure.getValue().failureToDisplay)).addColumnValue(String.valueOf(groupedBuildFailures.get(currentKey).size())).addColumnValue("").addColumnValue("").endRow();
                 System.out.println("\n\tFailure: ".concat(buildFailure.getValue().failureToDisplay));
                 System.out.println("\t-> Found ".concat(String.valueOf(groupedBuildFailures.get(currentKey).size())).concat(" failures."));
             }
@@ -484,20 +526,33 @@ public class Main {
                 lastBuild = currentBuild;
                 System.out.println("\t\tBuild: " + currentBuild);
             }
+            String buildNumber = "#".concat(currentBuild);
+            buildNumber = toolArgs.builds.contains(Integer.valueOf(currentBuild)) ? "<b>".concat(buildNumber).concat("</b>") : buildNumber;
+            toolArgs.htmlGenerator.startRow().addColumnValue("").addColumnValue("").addColumnValue(buildFailure.getValue().testName, buildFailure.getValue().testUrl).addColumnValue(buildNumber).endRow();
             System.out.println("\t\t\tFailed test report: ".concat(buildFailure.getValue().testUrl));
         }
+        toolArgs.htmlGenerator.endTable();
     }
 
     private static void printTheTestFailuresDifference(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesTestFailures, MultiValuedMap<String, TestFailure> buildNodesTestFailures2) {
-        System.out.println("\nShow the test failures differences between 2 builds: ");
+        toolArgs.htmlGenerator.addNewLine().addParagraph("Comparison results for job ".concat(toolArgs.jobUrl).concat(", builds ").concat(toolArgs.builds.toString()).concat(", compared to ").concat(toolArgs.jobUrl2).concat(", builds ").concat(toolArgs.referenceBuilds.toString()).concat(":"));
+        System.out.println("\nComparison results for job ".concat(toolArgs.jobUrl).concat(", builds ").concat(toolArgs.builds.toString()).concat(", compared to ").concat(toolArgs.jobUrl2).concat(", builds ").concat(toolArgs.referenceBuilds.toString()).concat(":"));
+        toolArgs.htmlGenerator.addParagraph("-> Found <b>".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat("</b> instead of <b>").concat(String.valueOf(buildNodesTestFailures2.keySet().size())).concat("</b> failed tests."));
         System.out.println("-> Found ".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat(" instead of ").concat(String.valueOf(buildNodesTestFailures2.keySet().size())).concat(" failed tests."));
         // sort the results by testName in ascending order
         Map.Entry<String, TestFailure>[] buildNodesTestFailuresArray = buildNodesTestFailures.entries().toArray(new Map.Entry[0]);
         Arrays.parallelSort(buildNodesTestFailuresArray, (o1, o2) -> o1.getKey().compareTo(o2.getKey()));
 
-        // compare the tests failures and print the difference
+        // compare the tests failures and print the differences
+        toolArgs.htmlGenerator.addParagraph("New failed tests:");
+        toolArgs.htmlGenerator.startTable().startRow().addColumnValue("Test Name/Link", true).addColumnValue("Failure Message", true).endRow();
+        HtmlGenerator differentFailuresReport = new HtmlGenerator();
+        differentFailuresReport.addParagraph("Failed tests with different failure:");
+        differentFailuresReport.startTable().startRow().addColumnValue("Test Name/Link", true).addColumnValue("Failure Message", true).endRow();
         System.out.println("\n#TestUrl\t#Failure\t#ReferenceFailure");
         int differencesCount = 0;
+        int newFailuresCount = 0;
+        int differentFailuresCount = 0;
         for (Map.Entry<String, TestFailure> buildTestFailure : buildNodesTestFailuresArray) {
             String currentKey = buildTestFailure.getKey();
             List<TestFailure> referenceTestFailures = (List<TestFailure>) buildNodesTestFailures2.get(currentKey);
@@ -511,10 +566,21 @@ public class Main {
             if (!failureFound) {
                 differencesCount++;
                 TestFailure currentValue = buildTestFailure.getValue();
-                String referenceTestFailure = referenceTestFailures.size() > 0 ? referenceTestFailures.get(0).failureToDisplay : "N/A";
+                String referenceTestFailure = "N/A";
+                if (referenceTestFailures.size() == 0 ) {
+                    newFailuresCount++;
+                    toolArgs.htmlGenerator.startRow().addColumnValue(currentValue.testName, currentValue.testUrl).addColumnValue(StringEscapeUtils.escapeHtml(currentValue.failureToDisplay)).endRow();
+                } else {
+                    differentFailuresCount++;
+                    differentFailuresReport.startRow().addColumnValue(currentValue.testName, currentValue.testUrl).addColumnValue(StringEscapeUtils.escapeHtml(currentValue.failureToDisplay)).endRow();
+                    referenceTestFailure = referenceTestFailures.get(0).failureToDisplay;
+                }
                 System.out.println(currentValue.testUrl.concat("\t\"").concat(currentValue.failureToDisplay).concat("\"\t\"").concat(referenceTestFailure).concat("\""));
             }
         }
+        toolArgs.htmlGenerator.startRow().addColumnValue("<b>Failures differences count: ".concat(String.valueOf(newFailuresCount)).concat("</b>")).addColumnValue("").endRow().endTable();
+        differentFailuresReport.startRow().addColumnValue("<b>Failures differences count: ".concat(String.valueOf(differentFailuresCount)).concat("</b>")).addColumnValue("").endRow().endTable();
+        toolArgs.htmlGenerator.addHtml(differentFailuresReport);
         System.out.println("-> Found ".concat(String.valueOf(differencesCount)).concat(" new test failures."));
     }
 
@@ -569,6 +635,9 @@ public class Main {
         System.out.println("Parameter lastReferenceBuildsCount=" + toolArgs.lastReferenceBuildsCount);
         toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
         System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
+        toolArgs.htmlReportFile = isEmpty(System.getProperty("htmlReportFile")) ? new File("ResultsReport.html") : new File(System.getProperty("htmlReportFile"));
+        System.out.println("Parameter htmlReportFile=" + toolArgs.showTestsDifferences);
+        toolArgs.htmlGenerator = new HtmlGenerator(toolArgs.htmlReportFile);
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
         toolArgs2.jobUrl = toolArgs.jobUrl2;
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
@@ -644,17 +713,25 @@ public class Main {
             }
         }
 
-        // ======== PRINT THE NODES/TESTS MATCHING THE SEARCHED TEXT ========
-        printTheNodesOrTestsMatchingSearchedText(toolArgs, buildNodesArtifacts);
+        if (toolArgs.backupJob || toolArgs.removeBackup) {
+            return;
+        }
 
-        if (toolArgs.groupTestsFailures) {
-            // ======== PRINT THE COMMON FAILURES ========
-            printTheCommonFailures(toolArgs, buildNodesFailures);
+        if (!toolArgs.groupTestsFailures && !toolArgs.showTestsDifferences) {
+            // ======== PRINT THE NODES/TESTS MATCHING THE SEARCHED TEXT ========
+            printTheNodesOrTestsMatchingSearchedText(toolArgs, buildNodesArtifacts);
         }
 
         if (toolArgs.showTestsDifferences) {
             // ======== PRINT THE TESTS FAILURES DIFFERENCE BETWEEN 2 BUILdS ========
             printTheTestFailuresDifference(toolArgs, buildNodesTestFailures, buildNodesTestFailures2);
         }
+
+        if (toolArgs.groupTestsFailures) {
+            // ======== PRINT THE COMMON FAILURES ========
+            printTheCommonFailures(toolArgs, buildNodesFailures);
+        }
+
+        toolArgs.htmlGenerator.saveHtmlFile();
     }
 }

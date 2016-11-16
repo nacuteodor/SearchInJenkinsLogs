@@ -28,6 +28,8 @@ public class ToolArgs implements Cloneable {
     Integer lastReferenceBuildsCount;
     Boolean showTestsDifferences;
     Map<String, String> buildParamsFilter;
+    File htmlReportFile;
+    HtmlGenerator htmlGenerator;
 
     @Override
     public Object clone() throws CloneNotSupportedException {
