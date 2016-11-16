@@ -10,26 +10,29 @@ public class ToolArgs implements Cloneable {
     String jobUrl2;
     String newUrlPrefix;
     String newUrlPrefix2;
-    Boolean searchInJUnitReports;
+    String backupPath;
     String threadPoolSizeString;
-    Integer threadPoolSize;
-    Set<Integer> builds;
-    Integer lastBuildsCount;
     String artifactsFilters;
     String searchedText;
-    Boolean groupTestsFailures;
+    Integer threadPoolSize;
+    Integer lastBuildsCount;
+    Integer lastReferenceBuildsCount;
     Double diffThreshold;
+    Boolean searchInJUnitReports;
+    Boolean groupTestsFailures;
+    Boolean showTestsDifferences;
     Boolean backupJob;
     Boolean useBackup;
     Boolean removeBackup;
-    String backupPath;
+    Boolean stableReport;
     File backupJobDirFile;
-    Set<Integer> referenceBuilds;
-    Integer lastReferenceBuildsCount;
-    Boolean showTestsDifferences;
-    Map<String, String> buildParamsFilter;
     File htmlReportFile;
+    File stabilityListFile;
+    Set<Integer> builds;
+    Set<Integer> referenceBuilds;
+    Map<String, String> buildParamsFilter;
     HtmlGenerator htmlGenerator;
+    StabilityListParser stabilityListParser;
 
     @Override
     public Object clone() throws CloneNotSupportedException {
