@@ -636,7 +636,7 @@ public class Main {
         toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
         System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
         toolArgs.htmlReportFile = isEmpty(System.getProperty("htmlReportFile")) ? new File("ResultsReport.html") : new File(System.getProperty("htmlReportFile"));
-        System.out.println("Parameter htmlReportFile=" + toolArgs.showTestsDifferences);
+        System.out.println("Parameter htmlReportFile=" + toolArgs.htmlReportFile.getAbsolutePath());
         toolArgs.htmlGenerator = new HtmlGenerator(toolArgs.htmlReportFile);
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
         toolArgs2.jobUrl = toolArgs.jobUrl2;
