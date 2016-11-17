@@ -212,6 +212,12 @@ public class Main {
     private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String testName, String buildNumber, String nodeUrl, ToolArgs toolArgs) {
         List<String> matchedFailedTests = new ArrayList<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
+        if (failureNodes.getLength() > 0 && toolArgs.stableReport != null) {
+            if (toolArgs.stableReport && !toolArgs.stabilityListParser.getStableTests().contains(testName) && toolArgs.stabilityListParser.getUnstableTests().contains(testName)
+                || !toolArgs.stableReport && !toolArgs.stabilityListParser.getUnstableTests().contains(testName) && toolArgs.stabilityListParser.getStableTests().contains(testName)) {
+                return new FailuresMatchResult(matchedFailedTests, testsFailures);
+            }
+        }
         for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
             Element failureElement = (Element) failureNodes.item(failureNodeIndex);
             String message = failureElement.getAttribute("message");
@@ -416,7 +422,7 @@ public class Main {
     }
 
     private static void printTheNodesOrTestsMatchingSearchedText(ToolArgs toolArgs, MultiValuedMap<String, String> buildNodesArtifacts) {
-        toolArgs.htmlGenerator.addNewLine().addParagraph("Print the nodes matching the searched text \"" + StringEscapeUtils.escapeHtml(toolArgs.searchedText) + "\" in artifacts for ".concat(toolArgs.jobUrl).concat(": "));
+        toolArgs.htmlGenerator.addParagraph("Print the nodes matching the searched text \"" + StringEscapeUtils.escapeHtml(toolArgs.searchedText) + "\" in artifacts for ".concat(toolArgs.jobUrl).concat(": "));
         System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
         toolArgs.htmlGenerator.startTable();
         toolArgs.htmlGenerator.startRow().addColumnValue("Build", true).addColumnValue("Nodes", true).addColumnValue("Artifacts", true).endRow();
@@ -456,7 +462,7 @@ public class Main {
             }
         }
         toolArgs.htmlGenerator.addColumnValue(artifactsColumnValue).endRow();
-        toolArgs.htmlGenerator.startRow().addColumnValue("Nodes count: ".concat(String.valueOf(buildNodesArtifacts.keySet().size())), true).addColumnValue("").addColumnValue("").endRow().endTable();;
+        toolArgs.htmlGenerator.startRow().addColumnValue("Nodes count: ".concat(String.valueOf(buildNodesArtifacts.keySet().size())), true).addColumnValue("").addColumnValue("").endRow().endTable().addNewLine();
     }
 
     private static Boolean failuresAreEqual(String failure1, String failure2, Double diffThreshold) {
@@ -475,7 +481,7 @@ public class Main {
     }
 
     private static void printTheCommonFailures(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesFailures) {
-        toolArgs.htmlGenerator.addNewLine().addParagraph("Group common failures from tests reports for ".concat(toolArgs.jobUrl).concat(", ").concat(toolArgs.jobUrl2 == toolArgs.jobUrl ? "" : toolArgs.jobUrl2).concat(": "));
+        toolArgs.htmlGenerator.addParagraph("Group common failures from tests reports for ".concat(toolArgs.jobUrl).concat(", ").concat(toolArgs.jobUrl2.equals(toolArgs.jobUrl) ? "" : toolArgs.jobUrl2).concat(": "));
         System.out.println("\nGroup common failures from tests reports: ");
         MultiValuedMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
         for (Map.Entry<String, TestFailure> buildNodeFailure : buildNodesFailures.entries()) {
@@ -531,11 +537,11 @@ public class Main {
             toolArgs.htmlGenerator.startRow().addColumnValue("").addColumnValue("").addColumnValue(buildFailure.getValue().testName, buildFailure.getValue().testUrl).addColumnValue(buildNumber).endRow();
             System.out.println("\t\t\tFailed test report: ".concat(buildFailure.getValue().testUrl));
         }
-        toolArgs.htmlGenerator.endTable();
+        toolArgs.htmlGenerator.endTable().addNewLine();
     }
 
     private static void printTheTestFailuresDifference(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesTestFailures, MultiValuedMap<String, TestFailure> buildNodesTestFailures2) {
-        toolArgs.htmlGenerator.addNewLine().addParagraph("Comparison results for job ".concat(toolArgs.jobUrl).concat(", builds ").concat(toolArgs.builds.toString()).concat(", compared to ").concat(toolArgs.jobUrl2).concat(", builds ").concat(toolArgs.referenceBuilds.toString()).concat(":"));
+        toolArgs.htmlGenerator.addParagraph("Comparison results for job ".concat(toolArgs.jobUrl).concat(", builds ").concat(toolArgs.builds.toString()).concat(", compared to ").concat(toolArgs.jobUrl2).concat(", builds ").concat(toolArgs.referenceBuilds.toString()).concat(":"));
         System.out.println("\nComparison results for job ".concat(toolArgs.jobUrl).concat(", builds ").concat(toolArgs.builds.toString()).concat(", compared to ").concat(toolArgs.jobUrl2).concat(", builds ").concat(toolArgs.referenceBuilds.toString()).concat(":"));
         toolArgs.htmlGenerator.addParagraph("-> Found <b>".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat("</b> instead of <b>").concat(String.valueOf(buildNodesTestFailures2.keySet().size())).concat("</b> failed tests."));
         System.out.println("-> Found ".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat(" instead of ").concat(String.valueOf(buildNodesTestFailures2.keySet().size())).concat(" failed tests."));
@@ -578,8 +584,8 @@ public class Main {
                 System.out.println(currentValue.testUrl.concat("\t\"").concat(currentValue.failureToDisplay).concat("\"\t\"").concat(referenceTestFailure).concat("\""));
             }
         }
-        toolArgs.htmlGenerator.startRow().addColumnValue("<b>Failures differences count: ".concat(String.valueOf(newFailuresCount)).concat("</b>")).addColumnValue("").endRow().endTable();
-        differentFailuresReport.startRow().addColumnValue("<b>Failures differences count: ".concat(String.valueOf(differentFailuresCount)).concat("</b>")).addColumnValue("").endRow().endTable();
+        toolArgs.htmlGenerator.startRow().addColumnValue("<b>Failures differences count: ".concat(String.valueOf(newFailuresCount)).concat("</b>")).addColumnValue("").endRow().endTable().addNewLine();
+        differentFailuresReport.startRow().addColumnValue("<b>Failures differences count: ".concat(String.valueOf(differentFailuresCount)).concat("</b>")).addColumnValue("").endRow().endTable().addNewLine();
         toolArgs.htmlGenerator.addHtml(differentFailuresReport);
         System.out.println("-> Found ".concat(String.valueOf(differencesCount)).concat(" new test failures."));
     }
@@ -636,8 +642,14 @@ public class Main {
         toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
         System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
         toolArgs.htmlReportFile = isEmpty(System.getProperty("htmlReportFile")) ? new File("ResultsReport.html") : new File(System.getProperty("htmlReportFile"));
-        System.out.println("Parameter htmlReportFile=" + toolArgs.htmlReportFile.getAbsolutePath());
+        System.out.println("Parameter htmlReportFile=" + toolArgs.htmlReportFile);
         toolArgs.htmlGenerator = new HtmlGenerator(toolArgs.htmlReportFile);
+        toolArgs.htmlGenerator = new HtmlGenerator(toolArgs.htmlReportFile);
+        toolArgs.stabilityListFile = isEmpty(System.getProperty("stabilityListFile")) ? null : new File(System.getProperty("stabilityListFile"));
+        System.out.println("Parameter stabilityListFile=" + toolArgs.stabilityListFile);
+        toolArgs.stableReport = isEmpty(System.getProperty("stableReport")) ? null : Boolean.valueOf(System.getProperty("stableReport"));
+        System.out.println("Parameter stableReport=" + toolArgs.stableReport);
+        toolArgs.stabilityListParser = toolArgs.stableReport == null ? null : new StabilityListParser(toolArgs.stabilityListFile);
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
         toolArgs2.jobUrl = toolArgs.jobUrl2;
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
