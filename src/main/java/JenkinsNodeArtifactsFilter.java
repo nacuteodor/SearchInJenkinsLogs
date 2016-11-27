@@ -1,5 +1,4 @@
 import com.jayway.jsonpath.JsonPath;
-import com.sun.org.apache.xpath.internal.operations.Bool;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;

@@ -292,7 +292,7 @@ public class Main {
         return URLDecoder.decode(file, Charset.defaultCharset().name());
     }
 
-    private static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean backupJob, Boolean useBackup) {
+    private static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean backupJob, Boolean useBackup, Integer backupRetention) {
         Set<Integer> backupBuilds = new HashSet<>();
         List<Integer> allAvailableBackupBuilds = new ArrayList<>();
         if (!backupJob && useBackup) {
@@ -323,7 +323,24 @@ public class Main {
         List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
         if (backupJob) {
             builds.clear();
-            builds.addAll(allAvailableBuildsList);
+            Set<Integer> allBuildsSet = new HashSet<>(allAvailableBuildsList);
+            allBuildsSet.addAll(allAvailableBackupBuilds);
+            List<Integer> allBuilds = new ArrayList<>(allBuildsSet);
+            allBuilds.sort(null);
+            // backup only the retention builds
+            if (backupRetention >= 0 && allBuilds.size() > 0) {
+                backupRetention = backupRetention > allBuilds.size() ? allBuilds.size() : backupRetention;
+                List<Integer> buildsToRemove = new ArrayList<>();
+                if (backupRetention < allBuilds.size()) {
+                    buildsToRemove.addAll(allBuilds.subList(0, allBuilds.size() - backupRetention));
+                }
+                allBuilds.removeAll(buildsToRemove);
+                for (Integer backupBuild : buildsToRemove) {
+                    FileUtils.deleteQuietly(new File(backupJobDirFile + File.separator + backupBuild));
+                    FileUtils.deleteQuietly(new File(backupJobDirFile + File.separator + backupBuild + KEYS_SEPARATOR + "Unfinished"));
+                }
+            }
+            builds.addAll(allBuilds);
             builds.removeAll(allAvailableBackupBuilds);
         } else {
             builds.retainAll(allAvailableBuildsList);
@@ -342,6 +359,7 @@ public class Main {
             }
         }
         builds.addAll(backupBuilds);
+
         return backupBuilds;
     }
 
@@ -361,7 +379,7 @@ public class Main {
             throw new IllegalArgumentException("Exception when parsing the job api response for URL " + toolArgs.jobUrl + " : " + jobResponse, e);
         }
         toolArgs.builds.addAll(lastNBuilds);
-        backupBuilds.addAll(updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup));
+        backupBuilds.addAll(updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup, toolArgs.backupRetention));
         List<Integer> sortedBuilds = new ArrayList<>(toolArgs.builds);
         sortedBuilds.sort(null);
         System.out.println("Parameter builds=" + sortedBuilds);
@@ -635,6 +653,8 @@ public class Main {
         System.out.println("Parameter removeBackup=" + toolArgs.removeBackup);
         toolArgs.backupPath = System.getProperty("backupPath") == null ? "" : System.getProperty("backupPath");
         System.out.println("Parameter backupPath=" + toolArgs.backupPath);
+        toolArgs.backupRetention = isEmpty(System.getProperty("backupRetention")) ? 20 : Integer.parseInt(System.getProperty("backupRetention"));
+        System.out.println("Parameter backupRetention=" + toolArgs.backupRetention);
         toolArgs.referenceBuilds = parseBuilds(System.getProperty("referenceBuilds"));
         System.out.println("Parameter referenceBuilds=" + toolArgs.referenceBuilds);
         toolArgs.lastReferenceBuildsCount = isEmpty(System.getProperty("lastReferenceBuildsCount")) ? 0 : Integer.parseInt(System.getProperty("lastReferenceBuildsCount"));
