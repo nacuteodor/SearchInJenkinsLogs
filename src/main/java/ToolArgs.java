@@ -17,6 +17,7 @@ public class ToolArgs implements Cloneable {
     Integer threadPoolSize;
     Integer lastBuildsCount;
     Integer lastReferenceBuildsCount;
+    Integer backupRetention;
     Double diffThreshold;
     Boolean searchInJUnitReports;
     Boolean groupTestsFailures;
