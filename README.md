@@ -21,7 +21,7 @@ Change the path to out/artifacts/searchinjenkinslogs_jar/ directory and run:
 
 java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-proxy.com/job/JobName/" -DthreadPoolSize=20 -Dbuilds="112,114-116,118" -DlastBuildsCount=2 -DartifactsFilters=".* fileFilter1.* ,.* fileFilter2.* " -DsearchInJUnitReports=true -DsearchedText=".* textToFind.* " -DgroupTestsFailures=true -DdiffThreshold=10 -DuseBackup=true -DbackupPath=$backupPath -cp searchinjenkinslogs.jar Main
 
-java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-proxy.com/job/JobName/" -DartifactsFilters=".* fileFilter1.* ,.* fileFilter2.* " -DbackupJob=true  -DbackupPath=$backupPath -cp searchinjenkinslogs.jar Main
+java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-proxy.com/job/JobName/" -DartifactsFilters=".* fileFilter1.* ,.* fileFilter2.* " -DbackupJob=true -DbackupPath=$backupPath -DbackupRetention=100 -cp searchinjenkinslogs.jar Main
 
 java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-proxy.com/job/JobName/"  -DartifactsFilters=".*xml " -DuseBackup=true  -DbackupPath=$backupPath -DjobUrl2="https://jenkins.com/job/$ReferenceJobName/" -DnewUrlPrefix2="http://jenkins-proxy.com/job/$ReferenceJobName/" -Dbuilds=$BuildToCompare -DreferenceBuilds=$ReferenceBuilds -DlastReferenceBuildsCount=$LastReferenceBuildsCount -DdiffThreshold=$DiffThreshold -DshowTestsDifferences=true -cp searchinjenkinslogs.jar Main
 
