@@ -1,5 +1,5 @@
 # SearchInJenkinsLogs
-A tool to be run for a Jenkins job to search a text with regular expressions in build artifacts.
+A tool to be run for a Jenkins job to search a text with regular expressions in build artifacts, to group the tests failures and to show the failures differences between 2 or more builds for a tests CI job.
 
 ## Benefits:
 - searches matching a regular expression with each build artifact file content
