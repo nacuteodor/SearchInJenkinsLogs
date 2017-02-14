@@ -6,9 +6,9 @@ A tool to be run for a Jenkins job to search a text with regular expressions in 
 - also, with -DsearchInJUnitReports=true you can search only in tests failures and print the failed test reports
 - another important feature is that setting -DgroupTestsFailures=true will find the common similar tests failures with a maximum difference threshold set with -DdiffThreshold argument. The tests CI job needs to add the JUnit reports xml files as artifacts and the tool needs -DartifactsFilters=".*xml" as argument to filter just the xml reports.
 - showing the failed tests difference, for the build specified in -Dbuilds, is also possible setting -DshowTestsDifferences=true and -DreferenceBuilds=$BuildNumbers or -DlastReferenceBuildsCount=$LastReferenceBuildsCount, the builds with the tests results to be compared with. The results will contain the failed test URL, the failure message and the reference build failure message. Same here, the tests CI job needs to add the JUnit reports xml files as artifacts and the tool needs -DartifactsFilters=".*xml" as argument to filter just the xml reports.
-- the job builds where to search can be specified as an enumeration and range using -Dbuilds property, or the last builds using -DlastBuildsCount property
+- the job builds, where to search, can be specified as an enumeration and range using -Dbuilds property, or the last builds using -DlastBuildsCount property
 - using -DbuildParamsFilter="$param1=$value1;$param2=$value2" you can filter the Jenkins builds based on build parameters values
-- the artifacts files can be filtered using regular expressions and more filters could be applied separated with commas ","
+- the artifacts files can be filtered using regular expressions and more filters could be applied separated with comma ","
 - the results can be found in the console output, but also saved in an HTML report file using -DhtmlReportFile property
 - a tests stability list with the stable/unstable tests can be provided using -DstabilityListFile property and it can filter the stable/unstable tests using -DstableReport boolean property
 - parallel processing, searches the regular expression for each build node in a separated thread for a better performance
