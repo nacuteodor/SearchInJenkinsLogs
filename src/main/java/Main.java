@@ -1,9 +1,6 @@
 import com.jayway.jsonpath.JsonPath;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
+
+import java.io.*;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -76,48 +73,6 @@ public class Main {
             }
         }
         return false;
-    }
-
-    /**
-     * @return an expanded Set of @builds parameter value
-     * For e.g 1,2,3-5, it will return a Set [1, 2, 3, 4, 5]
-     */
-    private static Set<Integer> parseBuilds(String builds) {
-        Set<Integer> buildsSet = new HashSet<>();
-        if (builds == null || builds.isEmpty()) {
-            return buildsSet;
-        }
-        String[] buildsAsStrings = builds.split(",");
-        for (String build : buildsAsStrings) {
-            String[] buildsRange = build.split("-");
-            if (buildsRange.length >= 2) {
-                for (Integer buildNumber = Integer.parseInt(buildsRange[0]); buildNumber <= Integer.parseInt(buildsRange[1]); buildNumber++) {
-                    buildsSet.add(buildNumber);
-                }
-            } else {
-                Integer intBuild = Integer.parseInt(build);
-                buildsSet.add(intBuild);
-            }
-        }
-        return buildsSet;
-    }
-
-    /**
-     * Used for parsing the -DBuildParamsFilter parameter values into a Map
-     */
-    private static Map<String, String> parseBuildParamsFilter(String params) {
-        Map<String, String> buildParamsFilter = new HashMap<>();
-        if (params.isEmpty()) {
-            return buildParamsFilter;
-        }
-        String[] keyValueMap = params.split(";");
-        for (String keyValue: keyValueMap) {
-            String[] tokens = keyValue.split("=");
-            String key = tokens[0];
-            String value = tokens.length > 1 ? tokens[1] : "";
-            buildParamsFilter.put(key, value);
-        }
-        return buildParamsFilter;
     }
 
     /**
@@ -215,7 +170,7 @@ public class Main {
         if (failureNodes.getLength() > 0 && toolArgs.stableReport != null) {
             if (toolArgs.stableReport && !toolArgs.stabilityListParser.getStableTests().contains(testName) && toolArgs.stabilityListParser.getUnstableTests().contains(testName)
                 || !toolArgs.stableReport && !toolArgs.stabilityListParser.getUnstableTests().contains(testName) && toolArgs.stabilityListParser.getStableTests().contains(testName)) {
-                return new FailuresMatchResult(matchedFailedTests, testsFailures);
+                return new FailuresMatchResult(matchedFailedTests, testsFailures, null);
             }
         }
         for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
@@ -225,12 +180,12 @@ public class Main {
                 matchedFailedTests.add(testUrl);
             }
             if (toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
-                String stacktrace = failureElement.getTextContent();
+                String stacktrace = failureElement.getTextContent().split("\\n")[0];
                 String failureToCompare = stacktrace.concat(": ").concat(message.split("\\n")[0]);
                 testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
             }
         }
-        return new FailuresMatchResult(matchedFailedTests, testsFailures);
+        return new FailuresMatchResult(matchedFailedTests, testsFailures, null);
     }
 
     /**
@@ -251,9 +206,10 @@ public class Main {
         List<String> matchedFailedTests = new ArrayList<>();
         Map<String, Integer> testsCount = new HashedMap<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
+        ArrayListValuedHashMap<String, TestStatus> testsStatus = new ArrayListValuedHashMap<>();
         // if the JUnit report is empty we cannot parse it
         if (jUnitReportXml.isEmpty()) {
-            return new FailuresMatchResult(matchedFailedTests, testsFailures);
+            return new FailuresMatchResult(matchedFailedTests, testsFailures, testsStatus);
         }
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
@@ -279,9 +235,15 @@ public class Main {
                 FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, testName, buildNumber, nodeUrl, toolArgs);
                 matchedFailedTests.addAll(errorsMatchResult.matchedFailedTests);
                 testsFailures.putAll(errorsMatchResult.testsFailures);
+                if (toolArgs.computeStabilityList) {
+                    String stabilityTestName = testCaseElement.getAttribute("classname").concat("&").concat(testCaseElement.getAttribute("name"));
+                    Boolean failedStatus = failureNodes.getLength() != 0 || errorNodes.getLength() != 0;
+                    TestStatus testStatus = new TestStatus(Integer.parseInt(buildNumber), failedStatus);
+                    testsStatus.put(stabilityTestName, testStatus);
+                }
             }
         }
-        return new FailuresMatchResult(matchedFailedTests, testsFailures);
+        return new FailuresMatchResult(matchedFailedTests, testsFailures, testsStatus);
     }
 
     static String encodeFile(String file) throws UnsupportedEncodingException {
@@ -608,68 +570,65 @@ public class Main {
         System.out.println("-> Found ".concat(String.valueOf(differencesCount)).concat(" new test failures."));
     }
 
+   private static void computeStabilityList(ToolArgs toolArgs, ArrayListValuedHashMap<String, TestStatus> testsStatus) throws IOException {
+       System.out.println("\nCompute tests stability list file: " + toolArgs.stabilityListFile);
+       Map<String, String> stableList = new HashedMap<>();
+       Map<String, String> unstableList = new HashedMap<>();
+       for (String key : testsStatus.keySet()) {
+           Collection<TestStatus> values = testsStatus.get(key);
+           TestStatus[] valuesArray = values.toArray(new TestStatus[0]);
+           Boolean stableTest = (valuesArray.length != 0) || (valuesArray.length >= toolArgs.minTestRuns);
+           Arrays.parallelSort(valuesArray, (o1, o2) -> o2.buildNumber.compareTo(o1.buildNumber));
+           // if last tests runs are failed then the test is considered unstable,
+           // if the last tests runs are passed then the test is considered stable
+           Integer failedCount = 0;
+           for (int i = 0; i<toolArgs.minTestRuns && valuesArray.length >= toolArgs.minTestRuns; i++) {
+               if (valuesArray[i].failedStatus) {
+                   failedCount++;
+               }
+           }
+           if (failedCount == toolArgs.minTestRuns) {
+               stableTest = false;
+           } else if (failedCount == 0) {
+               stableTest = stableTest && true;
+           }
+           for (int i = toolArgs.minTestRuns; i<valuesArray.length; i++) {
+               if (valuesArray[i].failedStatus) {
+                   failedCount++;
+               }
+           }
+           double stabilityRate = (valuesArray.length == 0) ? 0.0 : ((valuesArray.length - failedCount) * 1.0 / valuesArray.length) * 100;
+           stableTest = stableTest && stabilityRate > 50;
+           String stabilityValue = String.format("%.2f", stabilityRate).concat(":").concat(String.valueOf(valuesArray.length));
+           if (stableTest) {
+               stableList.put(key, stabilityValue);
+           } else {
+               unstableList.put(key, stabilityValue);
+           }
+       }
+       // write the stability data to file
+       BufferedWriter bw = null;
+       try {
+           bw = new BufferedWriter(new FileWriter(toolArgs.stabilityListFile));
+           bw.write("STABLE=");
+           for (Map.Entry<String, String> entry : stableList.entrySet()) {
+               bw.write(entry.getKey().concat(":").concat(entry.getValue()).concat(";"));
+           }
+           bw.newLine();
+           bw.write("UNSTABLE=");
+           for (Map.Entry<String, String> entry : unstableList.entrySet()) {
+               bw.write(entry.getKey().concat(":").concat(entry.getValue()).concat(";"));
+           }
+       } finally {
+           if (bw != null) {
+               bw.close();
+           }
+       }
+   }
+
     public static void main(String[] args) throws IOException, CloneNotSupportedException {
         // ======== GET AND PARSE THE ARGUMENTS VALUES ========
         ToolArgs toolArgs = new ToolArgs();
-        toolArgs.jobUrl = System.getProperty("jobUrl");
-        if (isEmpty(toolArgs.jobUrl)) {
-            throw new IllegalArgumentException("-DjobUrl parameter cannot be empty. Please, provide a valid URL!");
-        }
-        System.out.println("Parameter jobUrl=" + toolArgs.jobUrl);
-        toolArgs.newUrlPrefix = System.getProperty("newUrlPrefix");
-        System.out.println("Parameter newUrlPrefix=" + toolArgs.newUrlPrefix);
-        toolArgs.newUrlPrefix = isEmpty(toolArgs.newUrlPrefix) ? toolArgs.jobUrl : toolArgs.newUrlPrefix;
-        toolArgs.jobUrl2 = isEmpty(System.getProperty("jobUrl2")) ? toolArgs.jobUrl : System.getProperty("jobUrl2");
-        System.out.println("Parameter jobUrl2=" + toolArgs.jobUrl2);
-        toolArgs.newUrlPrefix2 = System.getProperty("newUrlPrefix2");
-        toolArgs.newUrlPrefix2 = isEmpty(toolArgs.newUrlPrefix2) ? toolArgs.jobUrl2 : toolArgs.newUrlPrefix2;
-        System.out.println("Parameter newUrlPrefix2=" + toolArgs.newUrlPrefix2);
-        toolArgs.searchInJUnitReports = isEmpty(System.getProperty("searchInJUnitReports")) ? false : Boolean.valueOf(System.getProperty("searchInJUnitReports"));
-        System.out.println("Parameter searchInJUnitReports=" + toolArgs.searchInJUnitReports);
-        toolArgs.threadPoolSizeString = System.getProperty("threadPoolSize");
-        toolArgs.threadPoolSize = isEmpty(System.getProperty("threadPoolSize")) ? 0 : Integer.parseInt(toolArgs.threadPoolSizeString);
-        System.out.println("Parameter threadPoolSize=" + toolArgs.threadPoolSize);
-        toolArgs.builds = parseBuilds(System.getProperty("builds"));
-        // in case there is no build number specified, search in the last job build artifacts
-        toolArgs.lastBuildsCount = toolArgs.builds.size() == 0 ? 1 : 0;
-        toolArgs.lastBuildsCount = isEmpty(System.getProperty("lastBuildsCount")) ? toolArgs.lastBuildsCount : Integer.parseInt(System.getProperty("lastBuildsCount"));
-        System.out.println("Parameter lastBuildsCount=" + toolArgs.lastBuildsCount);
-        toolArgs.artifactsFilters = System.getProperty("artifactsFilters") == null ? "" : System.getProperty("artifactsFilters");
-        System.out.println("Parameter artifactsFilters=" + toolArgs.artifactsFilters);
-        toolArgs.buildParamsFilter = parseBuildParamsFilter(System.getProperty("buildParamsFilter") == null ? "" : System.getProperty("buildParamsFilter"));
-        System.out.println("Parameter buildParamsFilter=" + toolArgs.buildParamsFilter);
-        toolArgs.searchedText = System.getProperty("searchedText") == null ? "" : System.getProperty("searchedText");
-        System.out.println("Parameter searchedText=" + toolArgs.searchedText);
-        toolArgs.groupTestsFailures = isEmpty(System.getProperty("groupTestsFailures")) ? false : Boolean.valueOf(System.getProperty("groupTestsFailures"));
-        System.out.println("Parameter groupTestsFailures=" + toolArgs.groupTestsFailures);
-        // the maximum difference threshold as a percentage of difference distance between 2 failures and the maximum possible distance for the shorter failure
-        toolArgs.diffThreshold = isEmpty(System.getProperty("diffThreshold")) ? 10 : Double.valueOf(System.getProperty("diffThreshold"));
-        System.out.println("Parameter diffThreshold=" + toolArgs.diffThreshold);
-        toolArgs.backupJob = isEmpty(System.getProperty("backupJob")) ? false : Boolean.valueOf(System.getProperty("backupJob"));
-        System.out.println("Parameter backupJob=" + toolArgs.backupJob);
-        toolArgs.useBackup = isEmpty(System.getProperty("useBackup")) ? false : Boolean.valueOf(System.getProperty("useBackup"));
-        System.out.println("Parameter useBackup=" + toolArgs.useBackup);
-        toolArgs.removeBackup = isEmpty(System.getProperty("removeBackup")) ? false : Boolean.valueOf(System.getProperty("removeBackup"));
-        System.out.println("Parameter removeBackup=" + toolArgs.removeBackup);
-        toolArgs.backupPath = System.getProperty("backupPath") == null ? "" : System.getProperty("backupPath");
-        System.out.println("Parameter backupPath=" + toolArgs.backupPath);
-        toolArgs.backupRetention = isEmpty(System.getProperty("backupRetention")) ? 20 : Integer.parseInt(System.getProperty("backupRetention"));
-        System.out.println("Parameter backupRetention=" + toolArgs.backupRetention);
-        toolArgs.referenceBuilds = parseBuilds(System.getProperty("referenceBuilds"));
-        System.out.println("Parameter referenceBuilds=" + toolArgs.referenceBuilds);
-        toolArgs.lastReferenceBuildsCount = isEmpty(System.getProperty("lastReferenceBuildsCount")) ? 0 : Integer.parseInt(System.getProperty("lastReferenceBuildsCount"));
-        System.out.println("Parameter lastReferenceBuildsCount=" + toolArgs.lastReferenceBuildsCount);
-        toolArgs.showTestsDifferences = isEmpty(System.getProperty("showTestsDifferences")) ? false : Boolean.valueOf(System.getProperty("showTestsDifferences"));
-        System.out.println("Parameter showTestsDifferences=" + toolArgs.showTestsDifferences);
-        toolArgs.htmlReportFile = isEmpty(System.getProperty("htmlReportFile")) ? new File("ResultsReport.html") : new File(System.getProperty("htmlReportFile"));
-        System.out.println("Parameter htmlReportFile=" + toolArgs.htmlReportFile);
-        toolArgs.htmlGenerator = new HtmlGenerator(toolArgs.htmlReportFile);
-        toolArgs.htmlGenerator = new HtmlGenerator(toolArgs.htmlReportFile);
-        toolArgs.stabilityListFile = isEmpty(System.getProperty("stabilityListFile")) ? null : new File(System.getProperty("stabilityListFile"));
-        System.out.println("Parameter stabilityListFile=" + toolArgs.stabilityListFile);
-        toolArgs.stableReport = isEmpty(System.getProperty("stableReport")) ? null : Boolean.valueOf(System.getProperty("stableReport"));
-        System.out.println("Parameter stableReport=" + toolArgs.stableReport);
-        toolArgs.stabilityListParser = toolArgs.stableReport == null ? null : new StabilityListParser(toolArgs.stabilityListFile);
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();
         toolArgs2.jobUrl = toolArgs.jobUrl2;
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
@@ -695,6 +654,7 @@ public class Main {
         MultiValuedMap<String, TestFailure> buildNodesFailures = new ArrayListValuedHashMap<>();
         MultiValuedMap<String, TestFailure> buildNodesTestFailures = new ArrayListValuedHashMap<>();
         MultiValuedMap<String, TestFailure> buildNodesTestFailures2 = new ArrayListValuedHashMap<>();
+        ArrayListValuedHashMap<String, TestStatus> testsStatus = new ArrayListValuedHashMap<>();
         // now see if there are exceptions while computing the builds nodes and extract the results
         for (int process = 0; process < processCount; process++) {
             try {
@@ -704,6 +664,9 @@ public class Main {
                 }
                 if (completedProcess.matchedFailedTests.size() > 0) {
                     buildNodesArtifacts.putAll(String.valueOf(completedProcess.buildNumber).concat(KEYS_SEPARATOR).concat(completedProcess.nodeUrl), completedProcess.matchedFailedTests);
+                }
+                if (completedProcess.testsStatus.size() > 0) {
+                    testsStatus.putAll(completedProcess.testsStatus);
                 }
                 if (completedProcess.testsFailures.size() > 0) {
                     if (toolArgs.showTestsDifferences) {
@@ -747,6 +710,10 @@ public class Main {
 
         if (toolArgs.backupJob || toolArgs.removeBackup) {
             return;
+        }
+
+        if (toolArgs.computeStabilityList) {
+            computeStabilityList(toolArgs, testsStatus);
         }
 
         if (!toolArgs.groupTestsFailures && !toolArgs.showTestsDifferences) {
