@@ -180,7 +180,8 @@ public class Main {
                 matchedFailedTests.add(testUrl);
             }
             if (toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
-                String stacktrace = failureElement.getTextContent().split("\\n")[0];
+                String[] stackTraceTokens = failureElement.getTextContent().split("\\n");
+                String stacktrace = stackTraceTokens[0].concat(stackTraceTokens.length > 1 ? "\n".concat(stackTraceTokens[1]) : "");
                 String failureToCompare = stacktrace.concat(": ").concat(message.split("\\n")[0]);
                 testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
             }
