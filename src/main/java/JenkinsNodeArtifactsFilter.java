@@ -1,4 +1,5 @@
 import com.jayway.jsonpath.JsonPath;
+import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -27,6 +28,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
     List<String> matchedArtifacts = new ArrayList<>();
     List<String> matchedFailedTests = new ArrayList<>();
     ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
+    ArrayListValuedHashMap<String, TestStatus> testsStatus = new ArrayListValuedHashMap<>();
 
     JenkinsNodeArtifactsFilter(ToolArgs toolArgs, String buildNumber, String nodeUrl, Boolean useBackup, File backupBuildDirFile) {
         this.toolArgs = toolArgs;
@@ -100,15 +102,16 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
                 }
                 continue;
             }
-            if (toolArgs.searchInJUnitReports || toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
+            if (toolArgs.searchInJUnitReports || toolArgs.groupTestsFailures || toolArgs.showTestsDifferences || toolArgs.computeStabilityList) {
                 FailuresMatchResult failuresMatchResult = Main.matchJUnitReportFailures(artifactFileContent, buildNumber, nodeUrl, toolArgs);
-                List<String> reportMatchedFailedTests = failuresMatchResult.matchedFailedTests;
-                matchedFailedTests.addAll(reportMatchedFailedTests);
-                testsFailures = failuresMatchResult.testsFailures;
+                matchedFailedTests.addAll( failuresMatchResult.matchedFailedTests);
+                testsFailures.putAll(failuresMatchResult.testsFailures);
+                testsStatus.putAll(failuresMatchResult.testsStatus);
                 continue;
             }
-            if (Main.findSearchedTextInContent(toolArgs.searchedText, artifactFileContent))
+            if (Main.findSearchedTextInContent(toolArgs.searchedText, artifactFileContent)) {
                 matchedArtifacts.add(artifactRelativePath);
+            }
         }
     }
 }

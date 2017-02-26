@@ -1,3 +1,4 @@
+import org.apache.commons.collections4.MultiValuedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 
 import java.util.List;
@@ -7,10 +8,12 @@ import java.util.List;
  */
 public class FailuresMatchResult {
     List<String> matchedFailedTests;
-    ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
+    ArrayListValuedHashMap<String, TestFailure> testsFailures;
+    ArrayListValuedHashMap<String, TestStatus> testsStatus;
 
-    FailuresMatchResult(List<String> matchedFailedTests, ArrayListValuedHashMap<String, TestFailure> testsFailures) {
+    FailuresMatchResult(List<String> matchedFailedTests, ArrayListValuedHashMap<String, TestFailure> testsFailures, ArrayListValuedHashMap<String, TestStatus> testsStatus) {
         this.matchedFailedTests = matchedFailedTests;
         this.testsFailures = testsFailures;
+        this.testsStatus = testsStatus;
     }
 }
