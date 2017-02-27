@@ -12,12 +12,14 @@ public class TestFailure implements Iterable<TestFailure> {
     String failureToDisplay;
     String testUrl;
     String testName;
+    String shortTestName;
 
-    TestFailure(String buildNumber, String nodeUrl, String testUrl, String testName, String failureToCompare, String failureToDisplay) {
+    TestFailure(String buildNumber, String nodeUrl, String testUrl, String testName, String shortTestName, String failureToCompare, String failureToDisplay) {
         this.buildNumber = buildNumber;
         this.nodeUrl = nodeUrl;
         this.testUrl = testUrl;
         this.testName = testName;
+        this.shortTestName = shortTestName;
         this.failureToCompare = failureToCompare;
         this.failureToDisplay = failureToDisplay;
     }
