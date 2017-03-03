@@ -1,10 +1,22 @@
+import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-
+import com.jayway.jsonpath.Option;
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.apache.commons.collections4.map.HashedMap;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.CharEncoding;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClientBuilder;
 
 import static org.apache.commons.lang3.StringUtils.isEmpty;
 
@@ -12,33 +24,42 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
  * Created by Teo on 9/3/2016.
  */
 public class ToolArgs implements Cloneable {
-    private  static final String PATH_PREFIX  = "$.";
-    private  static final String JOB_URL = "jobUrl";
-    private  static final String NEW_URL_PREFIX = "newUrlPrefix";
-    private  static final String JOB_URL2 = "jobUrl2";
-    private  static final String NEW_URL_PREFIX2 = "newUrlPrefix2";
-    private  static final String SEARCH_IN_JUNIT_REPORTS = "searchInJUnitReports";
-    private  static final String THREAD_POOL_SIZE = "threadPoolSize";
-    private  static final String BUILDS = "builds";
-    private  static final String LAST_BUILDS_COUNT = "lastBuildsCount";
-    private  static final String ARTIFACTS = "artifactsFilters";
-    private  static final String BUILDS_PARAMS_FILTER = "buildParamsFilter";
-    private  static final String SEARCHED_TEXT = "searchedText";
-    private  static final String GROUP_TESTS_FAILURES = "groupTestsFailures";
-    private  static final String DIFF_THRESHOLD = "diffThreshold";
-    private  static final String BACKUP_JOB = "backupJob";
-    private  static final String USE_BACKUP = "useBackup";
-    private  static final String REMOVE_BACKUP = "removeBackup";
-    private  static final String BACKUP_PATH = "backupPath";
-    private  static final String BACKUP_RETENTION = "backupRetention";
-    private  static final String REFERENCE_BUILDS = "referenceBuilds";
-    private  static final String LAST_REFERENCE_BUILDS_COUNT = "lastReferenceBuildsCount";
-    private  static final String SHOW_TESTS_DIFFERENCES = "showTestsDifferences";
-    private  static final String HTML_REPORT_FILE = "htmlReportFile";
-    private  static final String STABILITY_LIST_FILE = "stabilityListFile";
-    private  static final String STABLE_REPORT = "stableReport";
-    private  static final String COMPUTE_STABILITY_LIST = "computeStabilityList";
-    private  static final String MIN_TEST_RUNS = "minTestRuns";
+    private static final String PATH_PREFIX = "$.";
+    private static final String PATH_SEPARATOR = ".";
+    private static final String JOB_URL = "jobUrl";
+    private static final String NEW_URL_PREFIX = "newUrlPrefix";
+    private static final String JOB_URL2 = "jobUrl2";
+    private static final String NEW_URL_PREFIX2 = "newUrlPrefix2";
+    private static final String SEARCH_IN_JUNIT_REPORTS = "searchInJUnitReports";
+    private static final String THREAD_POOL_SIZE = "threadPoolSize";
+    private static final String BUILDS = "builds";
+    private static final String LAST_BUILDS_COUNT = "lastBuildsCount";
+    private static final String ARTIFACTS = "artifactsFilters";
+    private static final String BUILDS_PARAMS_FILTER = "buildParamsFilter";
+    private static final String SEARCHED_TEXT = "searchedText";
+    private static final String GROUP_TESTS_FAILURES = "groupTestsFailures";
+    private static final String DIFF_THRESHOLD = "diffThreshold";
+    private static final String BACKUP_JOB = "backupJob";
+    private static final String USE_BACKUP = "useBackup";
+    private static final String REMOVE_BACKUP = "removeBackup";
+    private static final String BACKUP_PATH = "backupPath";
+    private static final String BACKUP_RETENTION = "backupRetention";
+    private static final String REFERENCE_BUILDS = "referenceBuilds";
+    private static final String LAST_REFERENCE_BUILDS_COUNT = "lastReferenceBuildsCount";
+    private static final String SHOW_TESTS_DIFFERENCES = "showTestsDifferences";
+    private static final String HTML_REPORT_FILE = "htmlReportFile";
+    private static final String STABILITY_LIST_FILE = "stabilityListFile";
+    private static final String STABLE_REPORT = "stableReport";
+    private static final String COMPUTE_STABILITY_LIST = "computeStabilityList";
+    private static final String STABILITY_RATE = "stabilityRate";
+    private static final String MIN_TEST_RUNS = "minTestRuns";
+    private static final String JIRA = "jira";
+    private static final String API_URL = "apiUrl";
+    private static final String HEADERS = "headers";
+    private static final String NAME = "name";
+    private static final String VALUE = "value";
+    private static final String JQL = "jql";
+    private static final String URL = "url";
 
     String jobUrl;
     String jobUrl2;
@@ -87,8 +108,16 @@ public class ToolArgs implements Cloneable {
     private String buildParamsFilterString;
     HtmlGenerator htmlGenerator;
     StabilityListParser stabilityListParser;
+    Double stabilityRate;
+    String stabilityRateString;
     Integer minTestRuns;
     String minTestRunsString;
+    String jiraApiUrl;
+    Boolean integrateJira;
+    Map<String, String> jiraHeaders;
+    String jiraJql;
+    String jiraUrl;
+    Map<String, String> issueDescriptionMap;
 
     public ToolArgs() throws IOException {
         configFile = isEmpty(System.getProperty("configFile")) ? null : new File(System.getProperty("configFile"));
@@ -109,7 +138,7 @@ public class ToolArgs implements Cloneable {
         newUrlPrefix2 = isEmpty(newUrlPrefix2) ? jobUrl2 : newUrlPrefix2;
         System.out.println("Parameter " + NEW_URL_PREFIX2 + "=" + newUrlPrefix2);
         searchInJUnitReportsString = getNonEmptyValue(SEARCH_IN_JUNIT_REPORTS, searchInJUnitReportsString);
-        searchInJUnitReports =  isEmpty(searchInJUnitReportsString) ? false : Boolean.valueOf(searchInJUnitReportsString);
+        searchInJUnitReports = isEmpty(searchInJUnitReportsString) ? false : Boolean.valueOf(searchInJUnitReportsString);
         System.out.println("Parameter " + SEARCH_IN_JUNIT_REPORTS + "=" + searchInJUnitReports);
         threadPoolSizeString = getNonEmptyValue(THREAD_POOL_SIZE, threadPoolSizeString);
         threadPoolSize = isEmpty(threadPoolSizeString) ? 0 : Integer.parseInt(threadPoolSizeString);
@@ -121,11 +150,11 @@ public class ToolArgs implements Cloneable {
         lastBuildsCountString = getNonEmptyValue(LAST_BUILDS_COUNT, lastBuildsCountString);
         lastBuildsCount = isEmpty(lastBuildsCountString) ? lastBuildsCount : Integer.parseInt(lastBuildsCountString);
         System.out.println("Parameter " + LAST_BUILDS_COUNT + "=" + lastBuildsCount);
-        artifactsFilters =  getNonEmptyValue(ARTIFACTS, artifactsFilters);
-        artifactsFilters =  artifactsFilters == null ? "" : artifactsFilters;
+        artifactsFilters = getNonEmptyValue(ARTIFACTS, artifactsFilters);
+        artifactsFilters = artifactsFilters == null ? "" : artifactsFilters;
         System.out.println("Parameter " + ARTIFACTS + "=" + artifactsFilters);
         buildParamsFilterString = getNonEmptyValue(BUILDS_PARAMS_FILTER, buildParamsFilterString);
-        buildParamsFilter = parseBuildParamsFilter(buildParamsFilterString == null ? "" : buildParamsFilterString);
+        buildParamsFilter = parseKeyValuesIntoMap(buildParamsFilterString == null ? "" : buildParamsFilterString);
         System.out.println("Parameter " + BUILDS_PARAMS_FILTER + "=" + buildParamsFilter);
         searchedText = getNonEmptyValue(SEARCHED_TEXT, searchedText);
         searchedText = searchedText == null ? "" : searchedText;
@@ -175,9 +204,23 @@ public class ToolArgs implements Cloneable {
         computeStabilityListString = getNonEmptyValue(COMPUTE_STABILITY_LIST, computeStabilityListString);
         computeStabilityList = isEmpty(computeStabilityListString) ? false : Boolean.valueOf(computeStabilityListString);
         System.out.println("Parameter " + COMPUTE_STABILITY_LIST + "=" + computeStabilityList);
+        stabilityRateString = getNonEmptyValue(MIN_TEST_RUNS, stabilityRateString);
+        stabilityRate = isEmpty(stabilityRateString) ? 50 : Double.valueOf(stabilityRateString);
+        System.out.println("Parameter " + STABILITY_RATE + "=" + stabilityRate);
         minTestRunsString = getNonEmptyValue(MIN_TEST_RUNS, minTestRunsString);
         minTestRuns = isEmpty(minTestRunsString) ? 1 : Integer.valueOf(minTestRunsString);
         System.out.println("Parameter " + MIN_TEST_RUNS + "=" + minTestRuns);
+
+        jiraApiUrl = getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(API_URL), jiraApiUrl);
+        System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(API_URL) + "=" + jiraApiUrl);
+        integrateJira = !isEmpty(jiraApiUrl);
+        jiraHeaders = !isEmpty(System.getProperty(JIRA.concat(PATH_SEPARATOR).concat(HEADERS))) ? parseKeyValuesIntoMap(System.getProperty(JIRA.concat(PATH_SEPARATOR).concat(HEADERS))) : jiraHeaders;
+        System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(HEADERS) + "=" + jiraHeaders);
+        jiraJql = getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(JQL), jiraJql);
+        System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(JQL) + "=" + jiraJql);
+        jiraUrl = getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(URL), jiraUrl);
+        System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(URL) + "=" + jiraUrl);
+        issueDescriptionMap = integrateJira ? getJiraIssues() : null;
     }
 
     public void parseConfig() throws IOException {
@@ -187,32 +230,42 @@ public class ToolArgs implements Cloneable {
         String configJson = FileUtils.readFileToString(configFile);
 
         // parse the values from config
-        jobUrl = JsonPath.read(configJson, PATH_PREFIX.concat(JOB_URL));
-        newUrlPrefix = JsonPath.read(configJson, PATH_PREFIX.concat(NEW_URL_PREFIX));
-        jobUrl2 = JsonPath.read(configJson, PATH_PREFIX.concat(JOB_URL2));
-        newUrlPrefix2 = JsonPath.read(configJson, PATH_PREFIX.concat(NEW_URL_PREFIX2));
-        searchInJUnitReportsString = JsonPath.read(configJson, PATH_PREFIX.concat(SEARCH_IN_JUNIT_REPORTS));
-        threadPoolSizeString = JsonPath.read(configJson, PATH_PREFIX.concat(THREAD_POOL_SIZE));
-        buildsString = JsonPath.read(configJson, PATH_PREFIX.concat(BUILDS));
-        lastBuildsCountString = JsonPath.read(configJson, PATH_PREFIX.concat(LAST_BUILDS_COUNT));
-        artifactsFilters = JsonPath.read(configJson, PATH_PREFIX.concat(ARTIFACTS));
-        buildParamsFilterString = JsonPath.read(configJson, PATH_PREFIX.concat(BUILDS_PARAMS_FILTER));
-        searchedText = JsonPath.read(configJson, PATH_PREFIX.concat(SEARCHED_TEXT));
-        groupTestsFailuresString = JsonPath.read(configJson, PATH_PREFIX.concat(GROUP_TESTS_FAILURES));
-        diffThresholdString = JsonPath.read(configJson, PATH_PREFIX.concat(DIFF_THRESHOLD));
-        backupJobString = JsonPath.read(configJson, PATH_PREFIX.concat(BACKUP_JOB));
-        useBackupString = JsonPath.read(configJson, PATH_PREFIX.concat(USE_BACKUP));
-        removeBackupString = JsonPath.read(configJson, PATH_PREFIX.concat(REMOVE_BACKUP));
-        backupPath = JsonPath.read(configJson, PATH_PREFIX.concat(BACKUP_PATH));
-        backupRetentionString = JsonPath.read(configJson, PATH_PREFIX.concat(BACKUP_RETENTION));
-        referenceBuildsString = JsonPath.read(configJson, PATH_PREFIX.concat(REFERENCE_BUILDS));
-        lastReferenceBuildsCountString = JsonPath.read(configJson, PATH_PREFIX.concat(LAST_REFERENCE_BUILDS_COUNT));
-        showTestsDifferencesString = JsonPath.read(configJson, PATH_PREFIX.concat(SHOW_TESTS_DIFFERENCES));
-        htmlReportFileString = JsonPath.read(configJson, PATH_PREFIX.concat(HTML_REPORT_FILE));
-        stabilityListFileString = JsonPath.read(configJson, PATH_PREFIX.concat(STABILITY_LIST_FILE));
-        stableReportString = JsonPath.read(configJson, PATH_PREFIX.concat(STABLE_REPORT));
-        computeStabilityListString = JsonPath.read(configJson, PATH_PREFIX.concat(COMPUTE_STABILITY_LIST));
-        minTestRunsString = JsonPath.read(configJson, PATH_PREFIX.concat(MIN_TEST_RUNS));
+        Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL);
+        jobUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL));
+        newUrlPrefix = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(NEW_URL_PREFIX));
+        jobUrl2 = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL2));
+        newUrlPrefix2 = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(NEW_URL_PREFIX2));
+        searchInJUnitReportsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(SEARCH_IN_JUNIT_REPORTS));
+        threadPoolSizeString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(THREAD_POOL_SIZE));
+        buildsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILDS));
+        lastBuildsCountString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(LAST_BUILDS_COUNT));
+        artifactsFilters = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(ARTIFACTS));
+        buildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILDS_PARAMS_FILTER));
+        searchedText = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(SEARCHED_TEXT));
+        groupTestsFailuresString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(GROUP_TESTS_FAILURES));
+        diffThresholdString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(DIFF_THRESHOLD));
+        backupJobString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BACKUP_JOB));
+        useBackupString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(USE_BACKUP));
+        removeBackupString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(REMOVE_BACKUP));
+        backupPath = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BACKUP_PATH));
+        backupRetentionString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BACKUP_RETENTION));
+        referenceBuildsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(REFERENCE_BUILDS));
+        lastReferenceBuildsCountString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(LAST_REFERENCE_BUILDS_COUNT));
+        showTestsDifferencesString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(SHOW_TESTS_DIFFERENCES));
+        htmlReportFileString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(HTML_REPORT_FILE));
+        stabilityListFileString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABILITY_LIST_FILE));
+        stableReportString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABLE_REPORT));
+        computeStabilityListString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(COMPUTE_STABILITY_LIST));
+        stabilityRateString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABILITY_RATE));
+        minTestRunsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(MIN_TEST_RUNS));
+        jiraApiUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(API_URL));
+        List<Map<String, String>> headersList = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(HEADERS).concat("[*]"));
+        jiraHeaders = new HashMap<>();
+        for (Map<String, String> header : headersList) {
+            jiraHeaders.put(header.get(NAME), header.get(VALUE));
+        }
+        jiraJql = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(JQL));
+        jiraUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(URL));
     }
 
     @Override
@@ -245,15 +298,15 @@ public class ToolArgs implements Cloneable {
     }
 
     /**
-     * Used for parsing the -DBuildParamsFilter parameter values into a Map
+     * Used for parsing a parameter with "key1=value1;key2=value2;..." values into a Map
      */
-    private static Map<String, String> parseBuildParamsFilter(String params) {
+    private static Map<String, String> parseKeyValuesIntoMap(String params) {
         Map<String, String> buildParamsFilter = new HashMap<>();
-        if (params.isEmpty()) {
+        if (isEmpty(params)) {
             return buildParamsFilter;
         }
         String[] keyValueMap = params.split(";");
-        for (String keyValue: keyValueMap) {
+        for (String keyValue : keyValueMap) {
             String[] tokens = keyValue.split("=");
             String key = tokens[0];
             String value = tokens.length > 1 ? tokens[1] : "";
@@ -264,6 +317,32 @@ public class ToolArgs implements Cloneable {
 
     public static String getNonEmptyValue(String systemProperty, String defaultValue) {
         String paramValue = System.getProperty(systemProperty);
-        return (!isEmpty(paramValue)) ? paramValue: defaultValue;
+        return (!isEmpty(paramValue)) ? paramValue : defaultValue;
+    }
+
+    private Map<String, String> getJiraIssues() throws IOException {
+        String queryUrl = jiraApiUrl.concat("/search/?jql=").concat(URLEncoder.encode(jiraJql, CharEncoding.UTF_8).replace("+", "%20"));
+        System.out.println("Jira query url: ".concat(queryUrl));
+
+        HttpClient client = HttpClientBuilder.create().build();
+        HttpGet request = new HttpGet(queryUrl);
+
+        // add request headers
+        for (Map.Entry<String, String> entry : jiraHeaders.entrySet()) {
+            request.addHeader(entry.getKey(), entry.getValue());
+        }
+        request.addHeader("Content-Type", "application/json");
+        HttpResponse response = client.execute(request);
+        String searchResp = IOUtils.toString(response.getEntity().getContent());
+        System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
+        Map<String, String> issueDescriptionMap = new HashedMap<>();
+        List<Map<String, Object>> issues = JsonPath.read(searchResp, "$.issues[*]");
+        for (Map<String, Object> issue : issues) {
+            String issueId = (String) issue.get("key");
+            String description = JsonPath.read(issue.get("fields"), "$.description");
+            issueDescriptionMap.put(issueId, description);
+        }
+        System.out.println("Issues found: ".concat(issueDescriptionMap.keySet().toString()));
+        return issueDescriptionMap;
     }
 }

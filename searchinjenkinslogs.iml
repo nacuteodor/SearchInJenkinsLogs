@@ -12,9 +12,10 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="lib" level="project" />
-    <orderEntry type="library" name="com.jayway.jsonpath:json-path:0.8.11" level="project" />
     <orderEntry type="library" name="commons-io:commons-io:2.4" level="project" />
     <orderEntry type="library" name="org.apache.commons:commons-collections4:4.1" level="project" />
     <orderEntry type="library" name="org.apache.commons:commons-lang3:3.4" level="project" />
+    <orderEntry type="library" name="org.apache.httpcomponents:httpclient:4.4.1" level="project" />
+    <orderEntry type="library" name="com.jayway.jsonpath:json-path:2.2.0" level="project" />
   </component>
 </module>
