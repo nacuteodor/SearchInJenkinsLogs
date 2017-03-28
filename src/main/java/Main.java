@@ -148,7 +148,7 @@ public class Main {
     }
 
     private static String buildTestReportLink(String node, String test) {
-        return node.concat("testReport/junit/").concat(test);
+        return node.concat("testReport/junit/".concat(test).replace("//", "/(empty)/"));
     }
 
     private static String buildArtifactLink(String node, String artifactPath) {
