@@ -604,7 +604,7 @@ public class Main {
        for (String key : testsStatus.keySet()) {
            Collection<TestStatus> values = testsStatus.get(key);
            TestStatus[] valuesArray = values.toArray(new TestStatus[0]);
-           Boolean stableTest = (valuesArray.length != 0) || (valuesArray.length >= toolArgs.minTestRuns);
+           Boolean stableTest = (valuesArray.length != 0) && (valuesArray.length >= toolArgs.minTestRuns);
            Arrays.parallelSort(valuesArray, (o1, o2) -> o2.buildNumber.compareTo(o1.buildNumber));
            // if last tests runs are failed then the test is considered unstable,
            // if the last tests runs are passed then the test is considered stable

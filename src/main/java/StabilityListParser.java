@@ -25,10 +25,13 @@ public class StabilityListParser {
     }
 
     private Set<String> extractTests(String stringLine) {
+        Set<String> tests = new HashSet<>();
         String[] listTokens = stringLine.split("=");
+        if (listTokens.length < 2) {
+            return tests;
+        }
         String testsString = listTokens[1];
         String[] itemsList = testsString.split(";");
-        Set<String> tests = new HashSet<>();
         for (String item: itemsList) {
             if (!item.isEmpty()) {
                 tests.add(item.split(":")[0].replace("&", "."));
