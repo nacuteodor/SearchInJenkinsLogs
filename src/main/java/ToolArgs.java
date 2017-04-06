@@ -310,7 +310,9 @@ public class ToolArgs implements Cloneable {
             String[] tokens = keyValue.split("=");
             String key = tokens[0];
             String value = tokens.length > 1 ? tokens[1] : "";
-            buildParamsFilter.put(key, value);
+            if (!key.isEmpty()) {
+                buildParamsFilter.put(key, value);
+            }
         }
         return buildParamsFilter;
     }
