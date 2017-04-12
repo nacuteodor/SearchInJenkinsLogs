@@ -35,7 +35,8 @@ public class ToolArgs implements Cloneable {
     private static final String BUILDS = "builds";
     private static final String LAST_BUILDS_COUNT = "lastBuildsCount";
     private static final String ARTIFACTS = "artifactsFilters";
-    private static final String BUILDS_PARAMS_FILTER = "buildParamsFilter";
+    private static final String BUILD_PARAMS_FILTER = "buildParamsFilter";
+    private static final String REFERENCE_BUILD_PARAMS_FILTER = "referenceBuildParamsFilter";
     private static final String SEARCHED_TEXT = "searchedText";
     private static final String GROUP_TESTS_FAILURES = "groupTestsFailures";
     private static final String DIFF_THRESHOLD = "diffThreshold";
@@ -106,6 +107,8 @@ public class ToolArgs implements Cloneable {
     private String referenceBuildsString;
     Map<String, String> buildParamsFilter;
     private String buildParamsFilterString;
+    Map<String, String> referenceBuildParamsFilter;
+    private String referenceBuildParamsFilterString;
     HtmlGenerator htmlGenerator;
     StabilityListParser stabilityListParser;
     Double stabilityRate;
@@ -153,9 +156,13 @@ public class ToolArgs implements Cloneable {
         artifactsFilters = getNonEmptyValue(ARTIFACTS, artifactsFilters);
         artifactsFilters = artifactsFilters == null ? "" : artifactsFilters;
         System.out.println("Parameter " + ARTIFACTS + "=" + artifactsFilters);
-        buildParamsFilterString = getNonEmptyValue(BUILDS_PARAMS_FILTER, buildParamsFilterString);
+        buildParamsFilterString = getNonEmptyValue(BUILD_PARAMS_FILTER, buildParamsFilterString);
         buildParamsFilter = parseKeyValuesIntoMap(buildParamsFilterString == null ? "" : buildParamsFilterString);
-        System.out.println("Parameter " + BUILDS_PARAMS_FILTER + "=" + buildParamsFilter);
+        System.out.println("Parameter " + BUILD_PARAMS_FILTER + "=" + buildParamsFilter);
+        referenceBuildParamsFilterString = getNonEmptyValue(REFERENCE_BUILD_PARAMS_FILTER, referenceBuildParamsFilterString);
+        referenceBuildParamsFilter = parseKeyValuesIntoMap(referenceBuildParamsFilterString == null ? "" : referenceBuildParamsFilterString);
+        referenceBuildParamsFilter = referenceBuildParamsFilter.size() == 0 ? buildParamsFilter : referenceBuildParamsFilter;
+        System.out.println("Parameter " + REFERENCE_BUILD_PARAMS_FILTER + "=" + referenceBuildParamsFilter);
         searchedText = getNonEmptyValue(SEARCHED_TEXT, searchedText);
         searchedText = searchedText == null ? "" : searchedText;
         System.out.println("Parameter " + SEARCHED_TEXT + "=" + searchedText);
@@ -240,7 +247,8 @@ public class ToolArgs implements Cloneable {
         buildsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILDS));
         lastBuildsCountString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(LAST_BUILDS_COUNT));
         artifactsFilters = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(ARTIFACTS));
-        buildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILDS_PARAMS_FILTER));
+        buildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILD_PARAMS_FILTER));
+        referenceBuildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(REFERENCE_BUILD_PARAMS_FILTER));
         searchedText = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(SEARCHED_TEXT));
         groupTestsFailuresString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(GROUP_TESTS_FAILURES));
         diffThresholdString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(DIFF_THRESHOLD));

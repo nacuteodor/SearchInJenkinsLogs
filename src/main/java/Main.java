@@ -659,6 +659,7 @@ public class Main {
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
         toolArgs2.builds = toolArgs2.referenceBuilds;
         toolArgs2.lastBuildsCount = toolArgs.lastReferenceBuildsCount;
+        toolArgs2.buildParamsFilter = toolArgs.referenceBuildParamsFilter;
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
         ExecutorService executorService;
