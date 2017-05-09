@@ -29,7 +29,22 @@ java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-
 For iOS app system logs, you could use this regular expression: -DsearchedText="(.\*Terminating app due to uncaught exception.\*)|(.\*${AppName}\\[[0-9]\*\\]: fatal error:.\*)" , where ${AppName} is the name of the tested iOS app.
 
 ## IDE:
-Easy to integrate the project with Intellij, JDK 8
+Easy to integrate the project with Intellij, JDK 8.
+
+Import the project in IntelliJ:
+1. Create project from existing sources and select the project folder.
+2. Go from command line to project folder.
+3. Call "git reset --hard" to reset the project settings to the ones saved in git.
+4. You are asked to reload the project in IDE and reload it.
+
+Now, you should be able to build the project.
+To build the jar with your updates:
+1. Go to Build -> Build Artifacts -> Rebuild.
+
+In case you need another library dependency:
+1. Module Settings -> Libraries  - Add mvn library
+2. Module Settings -> Artifacts -> Output Layout - Select from "Available Elements" the new library and "Extract Into Output Root" (need to make sure there aren't libraries versions conflicts)
+3. Apply.
 
 ## Please, give a star to this project if it helps you.
 
