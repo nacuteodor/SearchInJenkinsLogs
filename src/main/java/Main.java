@@ -246,7 +246,7 @@ public class Main {
                 Element testCaseElement = (Element) testCaseNode;
                 String shortTestName = testCaseElement.getAttribute("name");
                 String testName = testCaseElement.getAttribute("classname").concat(".").concat(shortTestName);
-                String testUrl = testCaseElement.getAttribute("classname").replace(".", "/").concat("/").concat(shortTestName.replaceAll("[.\\\\()\\[\\]/-]", "_"));
+                String testUrl = testCaseElement.getAttribute("classname").replace(".", "/").concat("/").concat(shortTestName.replaceAll("[.\\\\()\\[\\]/,-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
