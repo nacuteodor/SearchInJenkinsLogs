@@ -113,32 +113,51 @@ public class Main {
      * @return a new xml
      */
     private static String encodeNewLineCharInFailureElement(String xml, String failureTag, String failureEndTag) {
-        String newXml = "";
+        StringBuilder newXml = new StringBuilder("");
         boolean replace = false;
+        boolean tagFound = false;
+        Integer maxNewLinesToReplace = 10;
+        Integer replacedNewLinesCount = 0;
         while (!xml.isEmpty()) {
-            int newLinePosition = xml.indexOf("\n");
+            int newLinePosition = xml.indexOf(failureTag);
             if (newLinePosition == -1) {
-                newXml = newXml.concat(xml);
+                newXml.append(xml);
                 break;
             }
-            String newLine = xml.substring(0, newLinePosition);
-            if (!newLine.contains(failureEndTag)) {
-                if (newLine.contains(failureTag)) {
-                    newLine = newLine.concat("&#10;");
-                    replace = true;
-                } else if (replace) {
-                    newLine = newLine.concat("&#10;");
-                } else {
-                    newLine = newLine.concat("\n");
+            StringBuilder newLine = new StringBuilder(xml.substring(0, newLinePosition));
+            newXml.append(newLine);
+            xml = xml.substring(newLinePosition);
+            boolean finishedReplace = false;
+            while (!finishedReplace) {
+                newLinePosition = xml.indexOf("\n");
+                if (newLinePosition == -1) {
+                    newXml.append(xml);
+                    return newXml.toString();
                 }
-            } else {
-                replace = false;
-                newLine = newLine.concat("\n");
+                newLine = new StringBuilder(xml.substring(0, newLinePosition));
+                if (newLine.indexOf(failureEndTag) == -1 && replacedNewLinesCount < maxNewLinesToReplace) {
+                    if (newLine.indexOf(failureTag) != -1) {
+                        newLine.append("&#10;");
+                        replace = true;
+                        replacedNewLinesCount = 1;
+                    } else if (replace) {
+                        newLine.append("&#10;");
+                        replacedNewLinesCount++;
+                    } else {
+                        newLine.append("\n");
+                    }
+                } else {
+                    replace = false;
+                    replacedNewLinesCount = 0;
+                    newLine.append("\n");
+                    // go to the next failure if we replaced the maximum new lines
+                    finishedReplace = true;
+                }
+                newXml.append(newLine);
+                xml = xml.substring(newLinePosition + 1);
             }
-            newXml = newXml.concat(newLine);
-            xml = xml.substring(newLinePosition + 1);
         }
-        return newXml;
+        return newXml.toString();
     }
 
     private static String encodeNewLineCharInFailureElements(String xml) {
