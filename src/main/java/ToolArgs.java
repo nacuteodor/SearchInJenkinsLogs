@@ -34,6 +34,8 @@ public class ToolArgs implements Cloneable {
     private static final String THREAD_POOL_SIZE = "threadPoolSize";
     private static final String BUILDS = "builds";
     private static final String LAST_BUILDS_COUNT = "lastBuildsCount";
+    private static final String BUILDS_FROM_LAST_X_HOURS = "buildsFromLastXHours";
+    private static final String REFERENCE_BUILDS_FROM_LAST_X_HOURS = "referenceBuildsFromLastXHours";
     private static final String ARTIFACTS = "artifactsFilters";
     private static final String BUILD_PARAMS_FILTER = "buildParamsFilter";
     private static final String REFERENCE_BUILD_PARAMS_FILTER = "referenceBuildParamsFilter";
@@ -73,6 +75,10 @@ public class ToolArgs implements Cloneable {
     private String threadPoolSizeString;
     Integer lastBuildsCount;
     private String lastBuildsCountString;
+    Integer buildsFromLastXHours;
+    private String buildsFromLastXHoursString;
+    Integer referenceBuildsFromLastXHours;
+    private String referenceBuildsFromLastXHoursString;
     Integer lastReferenceBuildsCount;
     private String lastReferenceBuildsCountString;
     Integer backupRetention;
@@ -112,9 +118,9 @@ public class ToolArgs implements Cloneable {
     HtmlGenerator htmlGenerator;
     StabilityListParser stabilityListParser;
     Double stabilityRate;
-    String stabilityRateString;
+    private String stabilityRateString;
     Integer minTestRuns;
-    String minTestRunsString;
+    private String minTestRunsString;
     String jiraApiUrl;
     Boolean integrateJira;
     Map<String, String> jiraHeaders;
@@ -148,11 +154,12 @@ public class ToolArgs implements Cloneable {
         System.out.println("Parameter " + THREAD_POOL_SIZE + "=" + threadPoolSize);
         buildsString = getNonEmptyValue(BUILDS, buildsString);
         builds = parseBuilds(buildsString);
-        // in case there is no build number specified, search in the last job build artifacts
-        lastBuildsCount = builds.size() == 0 ? 1 : 0;
         lastBuildsCountString = getNonEmptyValue(LAST_BUILDS_COUNT, lastBuildsCountString);
-        lastBuildsCount = isEmpty(lastBuildsCountString) ? lastBuildsCount : Integer.parseInt(lastBuildsCountString);
+        lastBuildsCount = isEmpty(lastBuildsCountString) ? 0 : Integer.parseInt(lastBuildsCountString);
         System.out.println("Parameter " + LAST_BUILDS_COUNT + "=" + lastBuildsCount);
+        buildsFromLastXHoursString = getNonEmptyValue(BUILDS_FROM_LAST_X_HOURS, buildsFromLastXHoursString);
+        buildsFromLastXHours = isEmpty(buildsFromLastXHoursString) ? 0 : Integer.parseInt(buildsFromLastXHoursString);
+        System.out.println("Parameter " + BUILDS_FROM_LAST_X_HOURS + "=" + buildsFromLastXHours);
         artifactsFilters = getNonEmptyValue(ARTIFACTS, artifactsFilters);
         artifactsFilters = artifactsFilters == null ? "" : artifactsFilters;
         System.out.println("Parameter " + ARTIFACTS + "=" + artifactsFilters);
@@ -194,6 +201,9 @@ public class ToolArgs implements Cloneable {
         lastReferenceBuildsCountString = getNonEmptyValue(LAST_REFERENCE_BUILDS_COUNT, lastReferenceBuildsCountString);
         lastReferenceBuildsCount = isEmpty(lastReferenceBuildsCountString) ? 0 : Integer.parseInt(lastReferenceBuildsCountString);
         System.out.println("Parameter " + LAST_REFERENCE_BUILDS_COUNT + "=" + lastReferenceBuildsCount);
+        referenceBuildsFromLastXHoursString = getNonEmptyValue(REFERENCE_BUILDS_FROM_LAST_X_HOURS, referenceBuildsFromLastXHoursString);
+        referenceBuildsFromLastXHours = isEmpty(referenceBuildsFromLastXHoursString) ? 0 : Integer.parseInt(referenceBuildsFromLastXHoursString);
+        System.out.println("Parameter " + REFERENCE_BUILDS_FROM_LAST_X_HOURS + "=" + referenceBuildsFromLastXHours);
         showTestsDifferencesString = getNonEmptyValue(SHOW_TESTS_DIFFERENCES, showTestsDifferencesString);
         showTestsDifferences = isEmpty(showTestsDifferencesString) ? false : Boolean.valueOf(showTestsDifferencesString);
         System.out.println("Parameter " + SHOW_TESTS_DIFFERENCES + "=" + showTestsDifferences);
@@ -246,6 +256,7 @@ public class ToolArgs implements Cloneable {
         threadPoolSizeString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(THREAD_POOL_SIZE));
         buildsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILDS));
         lastBuildsCountString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(LAST_BUILDS_COUNT));
+        buildsFromLastXHoursString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILDS_FROM_LAST_X_HOURS));
         artifactsFilters = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(ARTIFACTS));
         buildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILD_PARAMS_FILTER));
         referenceBuildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(REFERENCE_BUILD_PARAMS_FILTER));
@@ -259,6 +270,7 @@ public class ToolArgs implements Cloneable {
         backupRetentionString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BACKUP_RETENTION));
         referenceBuildsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(REFERENCE_BUILDS));
         lastReferenceBuildsCountString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(LAST_REFERENCE_BUILDS_COUNT));
+        referenceBuildsFromLastXHoursString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(REFERENCE_BUILDS_FROM_LAST_X_HOURS));
         showTestsDifferencesString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(SHOW_TESTS_DIFFERENCES));
         htmlReportFileString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(HTML_REPORT_FILE));
         stabilityListFileString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABILITY_LIST_FILE));

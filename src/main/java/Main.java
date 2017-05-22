@@ -10,14 +10,7 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
@@ -53,6 +46,7 @@ public class Main {
     private static final String KEYS_SEPARATOR = "#";
     static final String artifactsRelativePathJsonPath = "$.artifacts[*].relativePath";
     static final String buildsNumberJsonPath = "$.builds[*].number";
+    static final String timestampJsonPath = "$.timestamp";
     static final String buildsNumberUrlJsonPath = "$.builds[?(@.number == %d)].url";
     static final String buildParamsJsonPath = "$.actions[*].parameters[*]";
     private static Map<String, String> testsIssuesMap = new HashMap<>();
@@ -357,10 +351,31 @@ public class Main {
                 lastNBuilds = JsonPath.read(jobResponse, buildsNumberJsonPath);
                 lastNBuilds = lastNBuilds.subList(0, Math.min(toolArgs.lastBuildsCount, lastNBuilds.size()));
             }
+
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Exception when parsing the job api response for URL " + toolArgs.jobUrl + " : " + jobResponse, e);
         }
         toolArgs.builds.addAll(lastNBuilds);
+        if (toolArgs.buildsFromLastXHours > 0) {
+            List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
+            final int oneHour = 1000*60*60;
+            for (Integer buildNumber : allAvailableBuildsList) {
+                String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
+                try {
+                    String buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
+                    long timestamp = JsonPath.read(buildApiResp, timestampJsonPath);
+                    if ((System.currentTimeMillis() - timestamp)/oneHour <= toolArgs.buildsFromLastXHours) {
+                        toolArgs.builds.add(buildNumber);
+                    } else {
+                        break;
+                    }
+                } catch (IOException e) {
+                    System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
+                    continue;
+                }
+
+            }
+        }
         backupBuilds.addAll(updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup, toolArgs.backupRetention));
         List<Integer> sortedBuilds = new ArrayList<>(toolArgs.builds);
         sortedBuilds.sort(null);
@@ -678,6 +693,7 @@ public class Main {
         toolArgs2.newUrlPrefix = toolArgs.newUrlPrefix2;
         toolArgs2.builds = toolArgs2.referenceBuilds;
         toolArgs2.lastBuildsCount = toolArgs.lastReferenceBuildsCount;
+        toolArgs2.buildsFromLastXHours = toolArgs.referenceBuildsFromLastXHours;
         toolArgs2.buildParamsFilter = toolArgs.referenceBuildParamsFilter;
 
         // ======== START PROCESSING THE JOB NODES IN PARALLEL ========
@@ -690,7 +706,7 @@ public class Main {
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
         Integer processCount = submitBuildNodes(completionService, toolArgs);
-        if (!toolArgs.referenceBuilds.isEmpty() || toolArgs.lastReferenceBuildsCount > 0) {
+        if (!toolArgs.referenceBuilds.isEmpty() || toolArgs.lastReferenceBuildsCount > 0 || toolArgs.referenceBuildsFromLastXHours > 0) {
             // submit also the build nodes for jobUrl2, with build @referenceBuild
             processCount += submitBuildNodes(completionService, toolArgs2);
         }
