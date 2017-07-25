@@ -54,6 +54,7 @@ public class ToolArgs implements Cloneable {
     private static final String STABILITY_LIST_FILE = "stabilityListFile";
     private static final String STABLE_REPORT = "stableReport";
     private static final String COMPUTE_STABILITY_LIST = "computeStabilityList";
+    private static final String EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB = "excludeSelfBuildsFromReferenceJob";
     private static final String STABILITY_RATE = "stabilityRate";
     private static final String MIN_TEST_RUNS = "minTestRuns";
     private static final String JIRA = "jira";
@@ -101,6 +102,8 @@ public class ToolArgs implements Cloneable {
     private String stableReportString;
     Boolean computeStabilityList;
     private String computeStabilityListString;
+    Boolean excludeSelfBuildsFromReferenceJob;
+    private String excludeSelfBuildsFromReferenceJobString;
     File backupJobDirFile;
     File htmlReportFile;
     private String htmlReportFileString;
@@ -221,6 +224,9 @@ public class ToolArgs implements Cloneable {
         computeStabilityListString = getNonEmptyValue(COMPUTE_STABILITY_LIST, computeStabilityListString);
         computeStabilityList = isEmpty(computeStabilityListString) ? false : Boolean.valueOf(computeStabilityListString);
         System.out.println("Parameter " + COMPUTE_STABILITY_LIST + "=" + computeStabilityList);
+        excludeSelfBuildsFromReferenceJobString = getNonEmptyValue(EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB, excludeSelfBuildsFromReferenceJobString);
+        excludeSelfBuildsFromReferenceJob = isEmpty(excludeSelfBuildsFromReferenceJobString) ? false : Boolean.valueOf(excludeSelfBuildsFromReferenceJobString);
+        System.out.println("Parameter " + EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB + "=" + excludeSelfBuildsFromReferenceJob);
         stabilityRateString = getNonEmptyValue(MIN_TEST_RUNS, stabilityRateString);
         stabilityRate = isEmpty(stabilityRateString) ? 50 : Double.valueOf(stabilityRateString);
         System.out.println("Parameter " + STABILITY_RATE + "=" + stabilityRate);
@@ -276,6 +282,7 @@ public class ToolArgs implements Cloneable {
         stabilityListFileString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABILITY_LIST_FILE));
         stableReportString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABLE_REPORT));
         computeStabilityListString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(COMPUTE_STABILITY_LIST));
+        excludeSelfBuildsFromReferenceJobString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB));
         stabilityRateString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABILITY_RATE));
         minTestRunsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(MIN_TEST_RUNS));
         jiraApiUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(API_URL));

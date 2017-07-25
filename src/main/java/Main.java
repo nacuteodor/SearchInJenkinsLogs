@@ -10,7 +10,14 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorCompletionService;
@@ -355,7 +362,7 @@ public class Main {
         return backupBuilds;
     }
 
-    private static void computeBuilds(ToolArgs toolArgs, Set<Integer> backupBuilds, String jobResponse) throws IOException {
+    private static void computeBuilds(ToolArgs toolArgs, Set<Integer> excludedBuilds, Set<Integer> backupBuilds, String jobResponse) throws IOException {
         if (toolArgs.useBackup || toolArgs.backupJob || toolArgs.removeBackup) {
             Validate.notEmpty(toolArgs.backupPath, "backupPath parameter is empty!");
             toolArgs.backupJobDirFile = new File(toolArgs.backupPath + File.separator + encodeFile(toolArgs.jobUrl));
@@ -372,37 +379,56 @@ public class Main {
             throw new IllegalArgumentException("Exception when parsing the job api response for URL " + toolArgs.jobUrl + " : " + jobResponse, e);
         }
         toolArgs.builds.addAll(lastNBuilds);
-        if (toolArgs.buildsFromLastXHours > 0) {
+        if (toolArgs.buildsFromLastXHours > 0 || !toolArgs.buildParamsFilter.isEmpty()) {
             List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
             final int oneHour = 1000*60*60;
+            Set<Integer> validBuilds = new HashSet<>();
             for (Integer buildNumber : allAvailableBuildsList) {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
+                String buildApiResp;
                 try {
-                    String buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
-                    long timestamp = JsonPath.read(buildApiResp, timestampJsonPath);
-                    if ((System.currentTimeMillis() - timestamp)/oneHour <= toolArgs.buildsFromLastXHours) {
-                        toolArgs.builds.add(buildNumber);
-                    } else {
-                        break;
-                    }
+                    buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
                 } catch (IOException e) {
                     System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
                     continue;
                 }
-
+                boolean isValidBuild = true;
+                if (toolArgs.buildsFromLastXHours > 0) {
+                    long timestamp = JsonPath.read(buildApiResp, timestampJsonPath);
+                    isValidBuild = ((System.currentTimeMillis() - timestamp) / oneHour <= toolArgs.buildsFromLastXHours);
+                }
+                if (!isValidBuild) {
+                    break;
+                }
+                if (!toolArgs.buildParamsFilter.isEmpty()) {
+                    List<Map<String, String>> buildParams = JsonPath.read(buildApiResp, buildParamsJsonPath);
+                    isValidBuild = matchesBuildParams(buildParams, toolArgs.buildParamsFilter);
+                }
+                if (isValidBuild) {
+                    validBuilds.add(buildNumber);
+                }
             }
+            if (toolArgs.builds.size() > 0) {
+                toolArgs.builds.retainAll(validBuilds);
+            } else {
+                toolArgs.builds.addAll(validBuilds);
+            }
+            // no need to compute extra valid builds from backup builds
+            lastNBuilds = new ArrayList<>();
+            toolArgs.lastBuildsCount = 0;
         }
+        toolArgs.builds.removeAll(excludedBuilds);
         backupBuilds.addAll(updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup, toolArgs.backupRetention));
         List<Integer> sortedBuilds = new ArrayList<>(toolArgs.builds);
         sortedBuilds.sort(null);
         System.out.println("Parameter builds=" + sortedBuilds);
     }
 
-    private static Integer submitBuildNodes(CompletionService<JenkinsNodeArtifactsFilter> completionService, ToolArgs toolArgs) throws IOException {
+    private static Integer submitBuildNodes(CompletionService<JenkinsNodeArtifactsFilter> completionService, ToolArgs toolArgs, Set<Integer> excludedBuilds) throws IOException {
         String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json");
         String jobResponse = getUrlResponse(apiJobUrl);
         Set<Integer> backupBuilds = new HashSet<>();
-        computeBuilds(toolArgs, backupBuilds, jobResponse);
+        computeBuilds(toolArgs, excludedBuilds, backupBuilds, jobResponse);
         Integer processCount = 0;
         for (Integer buildNumber : toolArgs.builds) {
             List<String> nodesUrls;
@@ -414,19 +440,12 @@ public class Main {
             }
             Boolean useBackup = backupBuilds.contains(buildNumber);
             String buildApiResp = null;
-            if (!useBackup || toolArgs.buildParamsFilter.size() > 0) {
+            if (!useBackup) {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
                 try {
                     buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
                 } catch (IOException e) {
                     System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
-                    continue;
-                }
-            }
-            if (toolArgs.buildParamsFilter.size() > 0) {
-                useBackup = false;
-                List<Map<String, String>> buildParams = JsonPath.read(buildApiResp, buildParamsJsonPath);
-                if (!matchesBuildParams(buildParams, toolArgs.buildParamsFilter)) {
                     continue;
                 }
             }
@@ -721,10 +740,14 @@ public class Main {
         }
         CompletionService<JenkinsNodeArtifactsFilter> completionService = new ExecutorCompletionService<>(
                 executorService);
-        Integer processCount = submitBuildNodes(completionService, toolArgs);
+        Integer processCount = submitBuildNodes(completionService, toolArgs, new HashSet<>());
         if (!toolArgs.referenceBuilds.isEmpty() || toolArgs.lastReferenceBuildsCount > 0 || toolArgs.referenceBuildsFromLastXHours > 0) {
-            // submit also the build nodes for jobUrl2, with build @referenceBuild
-            processCount += submitBuildNodes(completionService, toolArgs2);
+            // submit also the build nodes for jobUrl2, with builds @referenceBuilds
+            Set<Integer> excludedBuilds = new HashSet<>();
+            if (toolArgs.jobUrl2.equals(toolArgs.jobUrl) && toolArgs.excludeSelfBuildsFromReferenceJob) {
+                excludedBuilds = toolArgs.builds;
+            }
+            processCount += submitBuildNodes(completionService, toolArgs2, excludedBuilds);
         }
 
         MultiValuedMap<String, String> buildNodesArtifacts = new ArrayListValuedHashMap<>();
