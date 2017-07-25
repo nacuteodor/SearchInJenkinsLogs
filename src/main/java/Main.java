@@ -109,7 +109,6 @@ public class Main {
     private static String encodeNewLineCharInFailureElement(String xml, String failureTag, String failureEndTag) {
         StringBuilder newXml = new StringBuilder("");
         boolean replace = false;
-        boolean tagFound = false;
         Integer maxNewLinesToReplace = 10;
         Integer replacedNewLinesCount = 0;
         while (!xml.isEmpty()) {
@@ -168,6 +167,15 @@ public class Main {
         return node.concat("artifact/").concat(artifactPath);
     }
 
+    private static String getFirstXLines(String text, int linesCount) {
+        String[] tokens = text.split("\\n");
+        String firstXLines = "";
+        for (int i = 0; i< Math.min(linesCount, tokens.length); i++) {
+            firstXLines = firstXLines.concat(tokens[i]).concat("\n");
+        }
+        return firstXLines;
+    }
+
     /**
      * Matches the @searchedText in each test failure for a test and return a list with the Jenkins links to the failed tests reports
      *
@@ -196,9 +204,9 @@ public class Main {
                 matchedFailedTests.add(testUrl);
             }
             if (toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
-                String[] stackTraceTokens = failureElement.getTextContent().split("\\n");
-                String stacktrace = stackTraceTokens[0].concat(stackTraceTokens.length > 1 ? "\n".concat(stackTraceTokens[1]) : "");
-                String failureToCompare = stacktrace.concat(": ").concat(message.split("\\n")[0]);
+                String stacktrace = failureElement.getTextContent();
+                stacktrace = getFirstXLines(stacktrace, 2);
+                String failureToCompare = stacktrace.concat(": ").concat(getFirstXLines(message, 1));
                 testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, shortTestName, failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
             }
         }
@@ -240,7 +248,15 @@ public class Main {
                 Element testCaseElement = (Element) testCaseNode;
                 String shortTestName = testCaseElement.getAttribute("name");
                 String testName = testCaseElement.getAttribute("classname").concat(".").concat(shortTestName);
-                String testUrl = testCaseElement.getAttribute("classname").replace(".", "/").concat("/").concat(shortTestName.replaceAll("[.\\\\()\\[\\]/,-]", "_"));
+                String[] classNameTokens  = testCaseElement.getAttribute("classname").split("\\.");
+                // the package name from url needs to remain with ".", the class name is delimited using "/"
+                String packageName = "";
+                for (int i = 0; i < classNameTokens.length - 1; i++) {
+                    packageName += classNameTokens[i].concat(".");
+                }
+                packageName = new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString();
+                String className = classNameTokens[classNameTokens.length - 1];
+                String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.\\\\()\\[\\]/,-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
