@@ -261,7 +261,7 @@ public class Main {
                 for (int i = 0; i < classNameTokens.length - 1; i++) {
                     packageName += classNameTokens[i].concat(".");
                 }
-                packageName = new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString();
+                packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
                 String className = classNameTokens[classNameTokens.length - 1];
                 String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.\\\\()\\[\\]/,-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
