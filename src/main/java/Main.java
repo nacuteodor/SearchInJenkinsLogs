@@ -213,7 +213,8 @@ public class Main {
             if (toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
                 String stacktrace = failureElement.getTextContent();
                 stacktrace = getFirstXLines(stacktrace, 2);
-                String failureToCompare = stacktrace.concat(": ").concat(getFirstXLines(message, 1));
+                stacktrace = stacktrace.trim().isEmpty() ? stacktrace : stacktrace.concat(": ");
+                String failureToCompare = stacktrace.concat(getFirstXLines(message, 1));
                 testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, shortTestName, failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
             }
         }
@@ -276,7 +277,10 @@ public class Main {
                 NodeList errorNodes = testCaseElement.getElementsByTagName("error");
                 FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, testName, shortTestName, buildNumber, nodeUrl, toolArgs);
                 matchedFailedTests.addAll(errorsMatchResult.matchedFailedTests);
-                testsFailures.putAll(errorsMatchResult.testsFailures);
+                NodeList skippedNodes = testCaseElement.getElementsByTagName("skipped");
+                FailuresMatchResult skippedMatchResult = matchTestCaseFailures(skippedNodes, testUrl, testName, shortTestName, buildNumber, nodeUrl, toolArgs);
+                matchedFailedTests.addAll(skippedMatchResult.matchedFailedTests);
+                testsFailures.putAll(skippedMatchResult.testsFailures);
                 if (toolArgs.computeStabilityList) {
                     String stabilityTestName = testCaseElement.getAttribute("classname").concat("&").concat(shortTestName);
                     Boolean failedStatus = failureNodes.getLength() != 0 || errorNodes.getLength() != 0;
