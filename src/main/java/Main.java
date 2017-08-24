@@ -521,7 +521,7 @@ public class Main {
     }
 
     private static Boolean failuresAreEqual(String failure1, String failure2, Double diffThreshold) {
-        Integer maxDistance = Math.min(failure1.length(), failure2.length());
+        Integer maxDistance = Math.max(failure1.length(), failure2.length());
         if (maxDistance == 0) {
             return true;
         }
