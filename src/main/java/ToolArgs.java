@@ -57,6 +57,7 @@ public class ToolArgs implements Cloneable {
     private static final String EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB = "excludeSelfBuildsFromReferenceJob";
     private static final String STABILITY_RATE = "stabilityRate";
     private static final String MIN_TEST_RUNS = "minTestRuns";
+    private static final String LAST_STABLE_RUNS = "lastStableRuns";
     private static final String JIRA = "jira";
     private static final String API_URL = "apiUrl";
     private static final String HEADERS = "headers";
@@ -124,6 +125,8 @@ public class ToolArgs implements Cloneable {
     private String stabilityRateString;
     Integer minTestRuns;
     private String minTestRunsString;
+    Integer lastStableRuns;
+    private String lastStableRunsString;
     String jiraApiUrl;
     Boolean integrateJira;
     Map<String, String> jiraHeaders;
@@ -227,12 +230,15 @@ public class ToolArgs implements Cloneable {
         excludeSelfBuildsFromReferenceJobString = getNonEmptyValue(EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB, excludeSelfBuildsFromReferenceJobString);
         excludeSelfBuildsFromReferenceJob = isEmpty(excludeSelfBuildsFromReferenceJobString) ? false : Boolean.valueOf(excludeSelfBuildsFromReferenceJobString);
         System.out.println("Parameter " + EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB + "=" + excludeSelfBuildsFromReferenceJob);
-        stabilityRateString = getNonEmptyValue(MIN_TEST_RUNS, stabilityRateString);
+        stabilityRateString = getNonEmptyValue(STABILITY_RATE, stabilityRateString);
         stabilityRate = isEmpty(stabilityRateString) ? 50 : Double.valueOf(stabilityRateString);
         System.out.println("Parameter " + STABILITY_RATE + "=" + stabilityRate);
         minTestRunsString = getNonEmptyValue(MIN_TEST_RUNS, minTestRunsString);
         minTestRuns = isEmpty(minTestRunsString) ? 1 : Integer.valueOf(minTestRunsString);
         System.out.println("Parameter " + MIN_TEST_RUNS + "=" + minTestRuns);
+        lastStableRunsString = getNonEmptyValue(LAST_STABLE_RUNS, lastStableRunsString);
+        lastStableRuns = isEmpty(lastStableRunsString) ? 1 : Integer.valueOf(lastStableRunsString);
+        System.out.println("Parameter " + LAST_STABLE_RUNS + "=" + lastStableRuns);
 
         jiraApiUrl = getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(API_URL), jiraApiUrl);
         System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(API_URL) + "=" + jiraApiUrl);
@@ -253,7 +259,7 @@ public class ToolArgs implements Cloneable {
         String configJson = FileUtils.readFileToString(configFile);
 
         // parse the values from config
-        Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL);
+        Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
         jobUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL));
         newUrlPrefix = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(NEW_URL_PREFIX));
         jobUrl2 = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL2));
@@ -285,6 +291,8 @@ public class ToolArgs implements Cloneable {
         excludeSelfBuildsFromReferenceJobString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(EXCLUDE_SELF_BUILDS_FROM_REFERENCE_JOB));
         stabilityRateString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(STABILITY_RATE));
         minTestRunsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(MIN_TEST_RUNS));
+        lastStableRunsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(LAST_STABLE_RUNS));
+
         jiraApiUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(API_URL));
         List<Map<String, String>> headersList = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(HEADERS).concat("[*]"));
         jiraHeaders = new HashMap<>();

@@ -41,6 +41,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
+import static org.apache.commons.lang3.math.NumberUtils.min;
+
 /**
  * Created by Teo on 7/30/2016.
  * A tool to be run for a Jenkins job to search a text with regular expressions in build artifacts.
@@ -682,22 +684,29 @@ public class Main {
            Arrays.parallelSort(valuesArray, (o1, o2) -> o2.buildNumber.compareTo(o1.buildNumber));
            // if last tests runs are failed then the test is considered unstable,
            // if the last tests runs are passed then the test is considered stable
-           Integer failedCount = 0;
-           for (int i = 0; i<toolArgs.minTestRuns && valuesArray.length >= toolArgs.minTestRuns; i++) {
+           int failedCount = 0;
+           int lastStableRuns = min(toolArgs.lastStableRuns, valuesArray.length);
+           for (int i = 0; i<lastStableRuns; i++) {
                if (valuesArray[i].failedStatus) {
                    failedCount++;
                }
            }
-           if (failedCount.equals(toolArgs.minTestRuns)) {
+           if (failedCount == 0) {
+               stableTest = stableTest && true;
+           }
+           if (failedCount == lastStableRuns) {
                stableTest = false;
            }
-           for (int i = toolArgs.minTestRuns; i<valuesArray.length; i++) {
+           boolean includeStabilityRate = stableTest && (failedCount != 0);
+           for (int i = lastStableRuns; i<valuesArray.length; i++) {
                if (valuesArray[i].failedStatus) {
                    failedCount++;
                }
            }
            double stabilityRate = (valuesArray.length == 0) ? 0.0 : ((valuesArray.length - failedCount) * 1.0 / valuesArray.length) * 100;
-           stableTest = stableTest && stabilityRate > toolArgs.stabilityRate;
+           if (includeStabilityRate) {
+               stableTest = stableTest && (stabilityRate > toolArgs.stabilityRate);
+           }
            String stabilityValue = String.format("%.2f", stabilityRate).concat(":").concat(String.valueOf(valuesArray.length));
            if (stableTest) {
                stableList.put(key, stabilityValue);
