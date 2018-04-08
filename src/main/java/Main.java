@@ -6,6 +6,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -734,7 +735,7 @@ public class Main {
        }
    }
 
-    public static void main(String[] args) throws IOException, CloneNotSupportedException {
+    public static void main(String[] args) throws IOException, CloneNotSupportedException, URISyntaxException {
         // ======== GET AND PARSE THE ARGUMENTS VALUES ========
         ToolArgs toolArgs = new ToolArgs();
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();

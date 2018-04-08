@@ -3,6 +3,8 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -134,7 +136,7 @@ public class ToolArgs implements Cloneable {
     String jiraUrl;
     Map<String, String> issueDescriptionMap;
 
-    public ToolArgs() throws IOException {
+    public ToolArgs() throws IOException, URISyntaxException {
         configFile = isEmpty(System.getProperty("configFile")) ? null : new File(System.getProperty("configFile"));
         System.out.println("Parameter configFile=" + configFile);
         parseConfig();
@@ -357,7 +359,7 @@ public class ToolArgs implements Cloneable {
         return (!isEmpty(paramValue)) ? paramValue : defaultValue;
     }
 
-    private Map<String, String> getJiraIssues() throws IOException {
+    private Map<String, String> getJiraIssues() throws IOException, URISyntaxException {
         String queryUrl = jiraApiUrl.concat("/search/?jql=").concat(URLEncoder.encode(jiraJql, CharEncoding.UTF_8).replace("+", "%20"));
         System.out.println("Jira query url: ".concat(queryUrl));
 
@@ -369,15 +371,28 @@ public class ToolArgs implements Cloneable {
             request.addHeader(entry.getKey(), entry.getValue());
         }
         request.addHeader("Content-Type", "application/json");
-        HttpResponse response = client.execute(request);
-        String searchResp = IOUtils.toString(response.getEntity().getContent());
-        System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
+
         Map<String, String> issueDescriptionMap = new HashedMap<>();
-        List<Map<String, Object>> issues = JsonPath.read(searchResp, "$.issues[*]");
-        for (Map<String, Object> issue : issues) {
-            String issueId = (String) issue.get("key");
-            String description = JsonPath.read(issue.get("fields"), "$.description");
-            issueDescriptionMap.put(issueId, description);
+        int startAt = 0;
+        boolean paginationFinished = false;
+        while (!paginationFinished) {
+            // added pagination calls (which are limited to 50 maxResults) to be able to get all the jira issues.
+            request.setURI(new URI(queryUrl.concat("&").concat("startAt=").concat(String.valueOf(startAt))));
+            HttpResponse response = client.execute(request);
+            String pageResp = IOUtils.toString(response.getEntity().getContent());
+            System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
+            startAt = startAt + (int) JsonPath.read(pageResp, "$.maxResults");
+            List<Map<String, Object>> issues = JsonPath.read(pageResp, "$.issues[*]");
+            for (Map<String, Object> issue : issues) {
+                String issueId = (String) issue.get("key");
+                Object fields = issue.get("fields");
+                String description = JsonPath.read(fields, "$.description");
+                String labels = JsonPath.read(fields, "$.labels").toString();
+                issueDescriptionMap.put(issueId, description.concat("\n").concat(labels));
+            }
+            if (startAt > (int) JsonPath.read(pageResp, "$.total")) {
+                paginationFinished = true;
+            }
         }
         System.out.println("Issues found: ".concat(issueDescriptionMap.keySet().toString()));
         return issueDescriptionMap;
