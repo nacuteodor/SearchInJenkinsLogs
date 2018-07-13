@@ -1,11 +1,4 @@
 import com.jayway.jsonpath.JsonPath;
-import org.apache.commons.collections4.MultiValuedMap;
-import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.xml.sax.SAXException;
-
-import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -14,6 +7,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
+import javax.xml.parsers.ParserConfigurationException;
+import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.xml.sax.SAXException;
 
 /**
  * Created by Teo on 8/8/2016.
@@ -88,7 +86,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
                 artifactFileContent = IOUtils.toString(new FileReader(backupNodeDirFile.getAbsoluteFile() + File.separator + artifactRelativePath));
                 artifactRelativePath = Main.decodeFile(artifactRelativePath);
             } else {
-                String artifactUrl = artifactUrlPrefix + artifactRelativePath.replace(" ", "%20");
+                String artifactUrl = artifactUrlPrefix + artifactRelativePath.replace(" ", "%20").replace("#", "%23");
                 try {
                     artifactFileContent = Main.getUrlResponse(artifactUrl);
                 } catch (IOException e) {
