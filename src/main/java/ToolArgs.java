@@ -388,7 +388,7 @@ public class ToolArgs implements Cloneable {
                 Object fields = issue.get("fields");
                 String description = JsonPath.read(fields, "$.description");
                 String labels = JsonPath.read(fields, "$.labels").toString();
-                issueDescriptionMap.put(issueId, description.concat("\n").concat(labels));
+                issueDescriptionMap.put(issueId, labels.concat("\n") + description);
             }
             if (startAt > (int) JsonPath.read(pageResp, "$.total")) {
                 paginationFinished = true;
