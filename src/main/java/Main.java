@@ -387,10 +387,10 @@ public class Main {
             throw new IllegalArgumentException("Exception when parsing the job api response for URL " + toolArgs.jobUrl + " : " + jobResponse, e);
         }
         toolArgs.builds.addAll(lastNBuilds);
+        Set<Integer> validBuilds = new HashSet<>();
         if (toolArgs.buildsFromLastXHours > 0 || !toolArgs.buildParamsFilter.isEmpty()) {
             List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
             final int oneHour = 1000*60*60;
-            Set<Integer> validBuilds = new HashSet<>();
             for (Integer buildNumber : allAvailableBuildsList) {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
                 String buildApiResp;
@@ -422,11 +422,15 @@ public class Main {
                 toolArgs.builds.addAll(validBuilds);
             }
             // no need to compute extra valid builds from backup builds
-            lastNBuilds = new ArrayList<>();
-            toolArgs.lastBuildsCount = 0;
+//            lastNBuilds = new ArrayList<>();
+//            toolArgs.lastBuildsCount = 0;
         }
         toolArgs.builds.removeAll(excludedBuilds);
+        validBuilds = new HashSet<>( toolArgs.builds);
         backupBuilds.addAll(updatedBuildsAndGetBackupBuilds(toolArgs.builds, lastNBuilds, toolArgs.lastBuildsCount, jobResponse, toolArgs.backupJobDirFile, toolArgs.backupJob, toolArgs.useBackup, toolArgs.backupRetention));
+        if (toolArgs.buildsFromLastXHours > 0 || !toolArgs.buildParamsFilter.isEmpty()) {
+            toolArgs.builds.retainAll(validBuilds);
+        }
         List<Integer> sortedBuilds = new ArrayList<>(toolArgs.builds);
         sortedBuilds.sort(null);
         System.out.println("Parameter builds=" + sortedBuilds);
