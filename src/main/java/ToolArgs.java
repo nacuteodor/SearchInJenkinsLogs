@@ -41,6 +41,7 @@ public class ToolArgs implements Cloneable {
     private static final String ARTIFACTS = "artifactsFilters";
     private static final String BUILD_PARAMS_FILTER = "buildParamsFilter";
     private static final String REFERENCE_BUILD_PARAMS_FILTER = "referenceBuildParamsFilter";
+    private static final String NODE_URL_FILTER = "nodeUrlFilter";
     private static final String SEARCHED_TEXT = "searchedText";
     private static final String GROUP_TESTS_FAILURES = "groupTestsFailures";
     private static final String DIFF_THRESHOLD = "diffThreshold";
@@ -121,6 +122,7 @@ public class ToolArgs implements Cloneable {
     private String buildParamsFilterString;
     Map<String, String> referenceBuildParamsFilter;
     private String referenceBuildParamsFilterString;
+    String nodeUrlFilter;
     HtmlGenerator htmlGenerator;
     StabilityListParser stabilityListParser;
     Double stabilityRate;
@@ -178,6 +180,9 @@ public class ToolArgs implements Cloneable {
         referenceBuildParamsFilter = parseKeyValuesIntoMap(referenceBuildParamsFilterString == null ? "" : referenceBuildParamsFilterString);
         referenceBuildParamsFilter = referenceBuildParamsFilter.size() == 0 ? buildParamsFilter : referenceBuildParamsFilter;
         System.out.println("Parameter " + REFERENCE_BUILD_PARAMS_FILTER + "=" + referenceBuildParamsFilter);
+        nodeUrlFilter = getNonEmptyValue(NODE_URL_FILTER, nodeUrlFilter);
+        nodeUrlFilter = isEmpty(nodeUrlFilter) ? "" : nodeUrlFilter;
+        System.out.println("Parameter " + NODE_URL_FILTER + "=" + nodeUrlFilter);
         searchedText = getNonEmptyValue(SEARCHED_TEXT, searchedText);
         searchedText = searchedText == null ? "" : searchedText;
         System.out.println("Parameter " + SEARCHED_TEXT + "=" + searchedText);
@@ -274,6 +279,7 @@ public class ToolArgs implements Cloneable {
         artifactsFilters = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(ARTIFACTS));
         buildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(BUILD_PARAMS_FILTER));
         referenceBuildParamsFilterString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(REFERENCE_BUILD_PARAMS_FILTER));
+        nodeUrlFilter = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(NODE_URL_FILTER));
         searchedText = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(SEARCHED_TEXT));
         groupTestsFailuresString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(GROUP_TESTS_FAILURES));
         diffThresholdString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(DIFF_THRESHOLD));

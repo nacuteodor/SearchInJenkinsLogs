@@ -472,9 +472,11 @@ public class Main {
 
             for (String nodeUrl : nodesUrls) {
                 nodeUrl = nodeUrl.replace(toolArgs.newUrlPrefix, toolArgs.jobUrl);
-                completionService.submit(new JenkinsNodeArtifactsFilter(toolArgs, String.valueOf(buildNumber), nodeUrl, useBackup, backupBuildDirFile));
-            }
-            processCount += nodesUrls.size();
+                if (toolArgs.nodeUrlFilter.isEmpty() || nodeUrl.matches(toolArgs.nodeUrlFilter)) {
+                    completionService.submit(new JenkinsNodeArtifactsFilter(toolArgs, String.valueOf(buildNumber), nodeUrl, useBackup, backupBuildDirFile));
+                    processCount += 1;
+                }
+            };
         }
         return processCount;
     }
