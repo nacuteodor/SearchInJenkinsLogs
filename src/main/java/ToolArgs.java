@@ -28,6 +28,8 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
 public class ToolArgs implements Cloneable {
     private static final String PATH_PREFIX = "$.";
     private static final String PATH_SEPARATOR = ".";
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
     private static final String JOB_URL = "jobUrl";
     private static final String NEW_URL_PREFIX = "newUrlPrefix";
     private static final String JOB_URL2 = "jobUrl2";
@@ -69,6 +71,8 @@ public class ToolArgs implements Cloneable {
     private static final String JQL = "jql";
     private static final String URL = "url";
 
+    String username;
+    String password;
     String jobUrl;
     String jobUrl2;
     String newUrlPrefix;
@@ -142,6 +146,8 @@ public class ToolArgs implements Cloneable {
         configFile = isEmpty(System.getProperty("configFile")) ? null : new File(System.getProperty("configFile"));
         System.out.println("Parameter configFile=" + configFile);
         parseConfig();
+        username = getNonEmptyValue(USERNAME, username);
+        password = getNonEmptyValue(PASSWORD, password);
         jobUrl = getNonEmptyValue(JOB_URL, jobUrl);
         if (isEmpty(jobUrl)) {
             throw new IllegalArgumentException("-D".concat(JOB_URL).concat(" parameter cannot be empty. Please, provide a valid URL!"));
@@ -267,6 +273,8 @@ public class ToolArgs implements Cloneable {
 
         // parse the values from config
         Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
+        username = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(USERNAME));
+        password = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(PASSWORD));
         jobUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL));
         newUrlPrefix = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(NEW_URL_PREFIX));
         jobUrl2 = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL2));
@@ -329,11 +337,11 @@ public class ToolArgs implements Cloneable {
         for (String build : buildsAsStrings) {
             String[] buildsRange = build.split("-");
             if (buildsRange.length >= 2) {
-                for (Integer buildNumber = Integer.parseInt(buildsRange[0]); buildNumber <= Integer.parseInt(buildsRange[1]); buildNumber++) {
+                for (Integer buildNumber = Integer.parseInt(buildsRange[0].trim()); buildNumber <= Integer.parseInt(buildsRange[1].trim()); buildNumber++) {
                     buildsSet.add(buildNumber);
                 }
             } else {
-                Integer intBuild = Integer.parseInt(build);
+                Integer intBuild = Integer.parseInt(build.trim());
                 buildsSet.add(intBuild);
             }
         }
