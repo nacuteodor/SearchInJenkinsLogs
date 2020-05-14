@@ -16,9 +16,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.CharEncoding;
 import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.HttpClientBuilder;
 
 import static org.apache.commons.lang3.StringUtils.isEmpty;
 
@@ -28,6 +26,8 @@ import static org.apache.commons.lang3.StringUtils.isEmpty;
 public class ToolArgs implements Cloneable {
     private static final String PATH_PREFIX = "$.";
     private static final String PATH_SEPARATOR = ".";
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
     private static final String JOB_URL = "jobUrl";
     private static final String NEW_URL_PREFIX = "newUrlPrefix";
     private static final String JOB_URL2 = "jobUrl2";
@@ -69,6 +69,8 @@ public class ToolArgs implements Cloneable {
     private static final String JQL = "jql";
     private static final String URL = "url";
 
+    String username;
+    String password;
     String jobUrl;
     String jobUrl2;
     String newUrlPrefix;
@@ -133,6 +135,8 @@ public class ToolArgs implements Cloneable {
     private String lastStableRunsString;
     String jiraApiUrl;
     Boolean integrateJira;
+    String jiraUsername;
+    String jiraPassword;
     Map<String, String> jiraHeaders;
     String jiraJql;
     String jiraUrl;
@@ -142,57 +146,61 @@ public class ToolArgs implements Cloneable {
         configFile = isEmpty(System.getProperty("configFile")) ? null : new File(System.getProperty("configFile"));
         System.out.println("Parameter configFile=" + configFile);
         parseConfig();
+        username = getNonEmptyValue(USERNAME, username);
+        System.out.println("Parameter ".concat(USERNAME).concat("=").concat(username));
+        password = getNonEmptyValue(PASSWORD, password);
+        System.out.println("Parameter ".concat(PASSWORD).concat("=*******"));
         jobUrl = getNonEmptyValue(JOB_URL, jobUrl);
         if (isEmpty(jobUrl)) {
             throw new IllegalArgumentException("-D".concat(JOB_URL).concat(" parameter cannot be empty. Please, provide a valid URL!"));
         }
         System.out.println("Parameter ".concat(JOB_URL).concat("=").concat(jobUrl));
         newUrlPrefix = getNonEmptyValue(NEW_URL_PREFIX, newUrlPrefix);
-        System.out.println("Parameter " + NEW_URL_PREFIX + "=" + newUrlPrefix);
+        System.out.println("Parameter ".concat(NEW_URL_PREFIX).concat("=").concat(newUrlPrefix));
         newUrlPrefix = isEmpty(newUrlPrefix) ? jobUrl : newUrlPrefix;
         jobUrl2 = getNonEmptyValue(JOB_URL2, jobUrl2);
         jobUrl2 = isEmpty(jobUrl2) ? jobUrl : jobUrl2;
-        System.out.println("Parameter " + JOB_URL2 + "=" + jobUrl2);
+        System.out.println("Parameter ".concat(JOB_URL2).concat("=").concat(jobUrl2));
         newUrlPrefix2 = getNonEmptyValue(NEW_URL_PREFIX2, newUrlPrefix2);
         newUrlPrefix2 = isEmpty(newUrlPrefix2) ? jobUrl2 : newUrlPrefix2;
-        System.out.println("Parameter " + NEW_URL_PREFIX2 + "=" + newUrlPrefix2);
+        System.out.println("Parameter ".concat(NEW_URL_PREFIX2).concat("=").concat(newUrlPrefix2));
         searchInJUnitReportsString = getNonEmptyValue(SEARCH_IN_JUNIT_REPORTS, searchInJUnitReportsString);
         searchInJUnitReports = isEmpty(searchInJUnitReportsString) ? false : Boolean.valueOf(searchInJUnitReportsString);
-        System.out.println("Parameter " + SEARCH_IN_JUNIT_REPORTS + "=" + searchInJUnitReports);
+        System.out.println("Parameter ".concat(SEARCH_IN_JUNIT_REPORTS).concat("=").concat(searchInJUnitReports.toString()));
         threadPoolSizeString = getNonEmptyValue(THREAD_POOL_SIZE, threadPoolSizeString);
         threadPoolSize = isEmpty(threadPoolSizeString) ? 0 : Integer.parseInt(threadPoolSizeString);
-        System.out.println("Parameter " + THREAD_POOL_SIZE + "=" + threadPoolSize);
+        System.out.println("Parameter ".concat(THREAD_POOL_SIZE).concat("=").concat(threadPoolSize.toString()));
         buildsString = getNonEmptyValue(BUILDS, buildsString);
         builds = parseBuilds(buildsString);
         lastBuildsCountString = getNonEmptyValue(LAST_BUILDS_COUNT, lastBuildsCountString);
         lastBuildsCount = isEmpty(lastBuildsCountString) ? 0 : Integer.parseInt(lastBuildsCountString);
-        System.out.println("Parameter " + LAST_BUILDS_COUNT + "=" + lastBuildsCount);
+        System.out.println("Parameter ".concat(LAST_BUILDS_COUNT).concat("=").concat(lastBuildsCount.toString()));
         buildsFromLastXHoursString = getNonEmptyValue(BUILDS_FROM_LAST_X_HOURS, buildsFromLastXHoursString);
         buildsFromLastXHours = isEmpty(buildsFromLastXHoursString) ? 0 : Integer.parseInt(buildsFromLastXHoursString);
-        System.out.println("Parameter " + BUILDS_FROM_LAST_X_HOURS + "=" + buildsFromLastXHours);
+        System.out.println("Parameter ".concat(BUILDS_FROM_LAST_X_HOURS).concat("=").concat(buildsFromLastXHours.toString()));
         artifactsFilters = getNonEmptyValue(ARTIFACTS, artifactsFilters);
         artifactsFilters = artifactsFilters == null ? "" : artifactsFilters;
-        System.out.println("Parameter " + ARTIFACTS + "=" + artifactsFilters);
+        System.out.println("Parameter ".concat(ARTIFACTS).concat("=").concat(artifactsFilters));
         buildParamsFilterString = getNonEmptyValue(BUILD_PARAMS_FILTER, buildParamsFilterString);
         buildParamsFilter = parseKeyValuesIntoMap(buildParamsFilterString == null ? "" : buildParamsFilterString);
-        System.out.println("Parameter " + BUILD_PARAMS_FILTER + "=" + buildParamsFilter);
+        System.out.println("Parameter ".concat(BUILD_PARAMS_FILTER).concat("=").concat(buildParamsFilter.toString()));
         referenceBuildParamsFilterString = getNonEmptyValue(REFERENCE_BUILD_PARAMS_FILTER, referenceBuildParamsFilterString);
         referenceBuildParamsFilter = parseKeyValuesIntoMap(referenceBuildParamsFilterString == null ? "" : referenceBuildParamsFilterString);
         referenceBuildParamsFilter = referenceBuildParamsFilter.size() == 0 ? buildParamsFilter : referenceBuildParamsFilter;
-        System.out.println("Parameter " + REFERENCE_BUILD_PARAMS_FILTER + "=" + referenceBuildParamsFilter);
+        System.out.println("Parameter ".concat(REFERENCE_BUILD_PARAMS_FILTER).concat("=").concat(referenceBuildParamsFilter.toString()));
         nodeUrlFilter = getNonEmptyValue(NODE_URL_FILTER, nodeUrlFilter);
         nodeUrlFilter = isEmpty(nodeUrlFilter) ? "" : nodeUrlFilter;
-        System.out.println("Parameter " + NODE_URL_FILTER + "=" + nodeUrlFilter);
+        System.out.println("Parameter ".concat(NODE_URL_FILTER).concat("=").concat(nodeUrlFilter));
         searchedText = getNonEmptyValue(SEARCHED_TEXT, searchedText);
         searchedText = searchedText == null ? "" : searchedText;
-        System.out.println("Parameter " + SEARCHED_TEXT + "=" + searchedText);
+        System.out.println("Parameter ".concat(SEARCHED_TEXT).concat("=").concat(searchedText));
         groupTestsFailuresString = getNonEmptyValue(GROUP_TESTS_FAILURES, groupTestsFailuresString);
         groupTestsFailures = isEmpty(groupTestsFailuresString) ? false : Boolean.valueOf(groupTestsFailuresString);
-        System.out.println("Parameter " + GROUP_TESTS_FAILURES + "=" + groupTestsFailures);
+        System.out.println("Parameter ".concat(GROUP_TESTS_FAILURES).concat("=").concat(groupTestsFailures.toString()));
         // the maximum difference threshold as a percentage of difference distance between 2 failures and the maximum possible distance for the shorter failure
         diffThresholdString = getNonEmptyValue(DIFF_THRESHOLD, diffThresholdString);
         diffThreshold = isEmpty(diffThresholdString) ? 10 : Double.valueOf(diffThresholdString);
-        System.out.println("Parameter " + DIFF_THRESHOLD + "=" + diffThreshold);
+        System.out.println("Parameter ".concat(DIFF_THRESHOLD).concat("=").concat(diffThreshold.toString()));
         backupJobString = getNonEmptyValue(BACKUP_JOB, backupJobString);
         backupJob = isEmpty(backupJobString) ? false : Boolean.valueOf(backupJobString);
         System.out.println("Parameter " + BACKUP_JOB + "=" + backupJob);
@@ -250,6 +258,10 @@ public class ToolArgs implements Cloneable {
         jiraApiUrl = getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(API_URL), jiraApiUrl);
         System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(API_URL) + "=" + jiraApiUrl);
         integrateJira = !isEmpty(jiraApiUrl);
+        jiraUsername = getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(USERNAME), jiraUsername);
+        System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(USERNAME) + "=" + jiraUsername);
+        jiraPassword= getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(PASSWORD), jiraPassword);
+        System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(PASSWORD) + "=********");
         jiraHeaders = !isEmpty(System.getProperty(JIRA.concat(PATH_SEPARATOR).concat(HEADERS))) ? parseKeyValuesIntoMap(System.getProperty(JIRA.concat(PATH_SEPARATOR).concat(HEADERS))) : jiraHeaders;
         System.out.println("Parameter " + JIRA.concat(PATH_SEPARATOR).concat(HEADERS) + "=" + jiraHeaders);
         jiraJql = getNonEmptyValue(JIRA.concat(PATH_SEPARATOR).concat(JQL), jiraJql);
@@ -267,6 +279,8 @@ public class ToolArgs implements Cloneable {
 
         // parse the values from config
         Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
+        username = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(USERNAME));
+        password = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(PASSWORD));
         jobUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL));
         newUrlPrefix = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(NEW_URL_PREFIX));
         jobUrl2 = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JOB_URL2));
@@ -302,6 +316,8 @@ public class ToolArgs implements Cloneable {
         lastStableRunsString = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(LAST_STABLE_RUNS));
 
         jiraApiUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(API_URL));
+        jiraUsername = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(USERNAME));
+        jiraPassword = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(PASSWORD));
         List<Map<String, String>> headersList = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(HEADERS).concat("[*]"));
         jiraHeaders = new HashMap<>();
         for (Map<String, String> header : headersList) {
@@ -329,11 +345,11 @@ public class ToolArgs implements Cloneable {
         for (String build : buildsAsStrings) {
             String[] buildsRange = build.split("-");
             if (buildsRange.length >= 2) {
-                for (Integer buildNumber = Integer.parseInt(buildsRange[0]); buildNumber <= Integer.parseInt(buildsRange[1]); buildNumber++) {
+                for (Integer buildNumber = Integer.parseInt(buildsRange[0].trim()); buildNumber <= Integer.parseInt(buildsRange[1].trim()); buildNumber++) {
                     buildsSet.add(buildNumber);
                 }
             } else {
-                Integer intBuild = Integer.parseInt(build);
+                Integer intBuild = Integer.parseInt(build.trim());
                 buildsSet.add(intBuild);
             }
         }
@@ -369,7 +385,6 @@ public class ToolArgs implements Cloneable {
         String queryUrl = jiraApiUrl.concat("/search/?jql=").concat(URLEncoder.encode(jiraJql, CharEncoding.UTF_8).replace("+", "%20"));
         System.out.println("Jira query url: ".concat(queryUrl));
 
-        HttpClient client = HttpClientBuilder.create().build();
         HttpGet request = new HttpGet(queryUrl);
 
         // add request headers
@@ -384,7 +399,7 @@ public class ToolArgs implements Cloneable {
         while (!paginationFinished) {
             // added pagination calls (which are limited to 50 maxResults) to be able to get all the jira issues.
             request.setURI(new URI(queryUrl.concat("&").concat("startAt=").concat(String.valueOf(startAt))));
-            HttpResponse response = client.execute(request);
+            HttpResponse response = Main.getUrlHttpResponse(request, jiraUsername, jiraPassword);
             String pageResp = IOUtils.toString(response.getEntity().getContent());
             System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
             startAt = startAt + (int) JsonPath.read(pageResp, "$.maxResults");

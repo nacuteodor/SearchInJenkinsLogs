@@ -1,4 +1,6 @@
+import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.Option;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -6,6 +8,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLDecoder;
@@ -36,6 +40,22 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.AuthCache;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.impl.auth.BasicScheme;
+import org.apache.http.impl.client.BasicAuthCache;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -61,9 +81,55 @@ public class Main {
     static final String buildParamsJsonPath = "$.actions[*].parameters[*]";
     private static Map<String, String> testsIssuesMap = new HashMap<>();
 
-    static String getUrlResponse(String urlString) throws IOException {
-        URL url = new URL(urlString);
-        return IOUtils.toString(new InputStreamReader(url.openStream()));
+    static HttpResponse getUrlHttpResponse(HttpGet httpGet, String username, String password) throws IOException {
+        URI uri = httpGet.getURI();
+        if (username != null) {
+            // authenticate
+            HttpHost host = new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme());
+            CredentialsProvider credsProvider = new BasicCredentialsProvider();
+            credsProvider.setCredentials(new AuthScope(uri.getHost(), uri.getPort()), new UsernamePasswordCredentials(username, password));
+            // Create AuthCache instance
+            AuthCache authCache = new BasicAuthCache();
+            // Generate BASIC scheme object and add it to the local auth cache
+            BasicScheme basicAuth = new BasicScheme();
+            authCache.put(host, basicAuth);
+            CloseableHttpClient httpClient = HttpClients.custom().setDefaultCredentialsProvider(credsProvider).build();
+            // Add AuthCache to the execution context
+            HttpClientContext localContext = HttpClientContext.create();
+            localContext.setAuthCache(authCache);
+            HttpResponse response = httpClient.execute(host, httpGet, localContext);
+            return response;
+        }
+
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpResponse response = httpClient.execute(httpGet);
+        return response;
+    }
+
+    static String getUrlResponse(HttpGet httpGet, String username, String password) throws IOException {
+        if (username == null) {
+            return IOUtils.toString(new InputStreamReader(httpGet.getURI().toURL().openStream()));
+        }
+        HttpResponse response = getUrlHttpResponse( httpGet, username, password);
+        return EntityUtils.toString(response.getEntity());
+    }
+
+    static String getUrlResponse(String urlString, String username, String password) throws IOException {
+        return getUrlResponse(new HttpGet(URI.create(urlString)), username, password);
+    }
+
+    /**
+     *  Replace the prefix @prefixUrl from url with @newPrefixUrl
+     */
+    static String replaceUrlPrefix(String url, String prefixUrl, String newPrefixUrl) throws MalformedURLException {
+        URL urlObj = new URL(url);
+        URL prefixUrlObj = new URL(prefixUrl);
+
+        if (urlObj.getPort() != prefixUrlObj.getPort()) {
+            url = url.replace(":".concat(String.valueOf(urlObj.getPort())).concat("/"), ":".concat(String.valueOf(prefixUrlObj.getPort())).concat("/"));
+        }
+
+        return url.replace(prefixUrl, newPrefixUrl);
     }
 
     /**
@@ -395,7 +461,7 @@ public class Main {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
                 String buildApiResp;
                 try {
-                    buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
+                    buildApiResp = getUrlResponse(replaceUrlPrefix(buildUrl, toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"), toolArgs.username, toolArgs.password);
                 } catch (IOException e) {
                     System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
                     continue;
@@ -433,8 +499,8 @@ public class Main {
     }
 
     private static Integer submitBuildNodes(CompletionService<JenkinsNodeArtifactsFilter> completionService, ToolArgs toolArgs, Set<Integer> excludedBuilds) throws IOException {
-        String apiJobUrl = toolArgs.jobUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json");
-        String jobResponse = getUrlResponse(apiJobUrl);
+        String apiJobUrl = replaceUrlPrefix(toolArgs.jobUrl, toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json");
+        String jobResponse = getUrlResponse(apiJobUrl, toolArgs.username, toolArgs.password);
         Set<Integer> backupBuilds = new HashSet<>();
         computeBuilds(toolArgs, excludedBuilds, backupBuilds, jobResponse);
         Integer processCount = 0;
@@ -447,11 +513,12 @@ public class Main {
                 backupBuildDirFile = unfinishedBackupBuildDirFile;
             }
             Boolean useBackup = backupBuilds.contains(buildNumber);
+            String buildUrl = null;
             String buildApiResp = null;
             if (!useBackup) {
-                String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
+                buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
                 try {
-                    buildApiResp = getUrlResponse(buildUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
+                    buildApiResp = getUrlResponse(replaceUrlPrefix(buildUrl, toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"), toolArgs.username, toolArgs.password);
                 } catch (IOException e) {
                     System.err.println("Got exception when getting API response for job build URL ".concat(buildUrl).concat(": ").concat(e.toString()));
                     continue;
@@ -460,7 +527,11 @@ public class Main {
             if (useBackup) {
                 nodesUrls = Arrays.asList(new FileHelper().getDirFilesList(backupBuildDirFile.getAbsolutePath(), "", false));
             } else {
-                nodesUrls = JsonPath.read(buildApiResp, String.format(runsNumberUrlJsonPath, buildNumber));
+                Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
+                nodesUrls = JsonPath.using(conf).parse(buildApiResp).read(String.format(runsNumberUrlJsonPath, buildNumber));
+                if (nodesUrls.size() == 0) {
+                    nodesUrls = Arrays.asList(buildUrl);
+                }
             }
             if (!useBackup && (toolArgs.removeBackup || toolArgs.backupJob)) {
                 FileUtils.deleteQuietly(finishedBackupBuildDirFile);
@@ -471,7 +542,7 @@ public class Main {
             }
 
             for (String nodeUrl : nodesUrls) {
-                nodeUrl = nodeUrl.replace(toolArgs.newUrlPrefix, toolArgs.jobUrl);
+                nodeUrl = replaceUrlPrefix(nodeUrl, toolArgs.newUrlPrefix, toolArgs.jobUrl);
                 if (toolArgs.nodeUrlFilter.isEmpty() || nodeUrl.matches(toolArgs.nodeUrlFilter)) {
                     completionService.submit(new JenkinsNodeArtifactsFilter(toolArgs, String.valueOf(buildNumber), nodeUrl, useBackup, backupBuildDirFile));
                     processCount += 1;
@@ -481,7 +552,7 @@ public class Main {
         return processCount;
     }
 
-    private static void printTheNodesOrTestsMatchingSearchedText(ToolArgs toolArgs, MultiValuedMap<String, String> buildNodesArtifacts) {
+    private static void printTheNodesOrTestsMatchingSearchedText(ToolArgs toolArgs, MultiValuedMap<String, String> buildNodesArtifacts) throws MalformedURLException {
         toolArgs.htmlGenerator.addParagraph("Print the nodes matching the searched text \"" + StringEscapeUtils.escapeHtml4(toolArgs.searchedText) + "\" in artifacts for ".concat(toolArgs.jobUrl).concat(": "));
         System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
         toolArgs.htmlGenerator.startTable();
@@ -509,7 +580,7 @@ public class Main {
 
             if (isDifferentNode) {
                 lastNode = currentNode;
-                toolArgs.htmlGenerator.startRow().addColumnValue("").addColumnValue(currentNode.replace(toolArgs.jobUrl, ""), currentNode);
+                toolArgs.htmlGenerator.startRow().addColumnValue("").addColumnValue(replaceUrlPrefix(currentNode, toolArgs.jobUrl, ""), currentNode);
                 artifactsColumnValue = "";
                 System.out.println("\tNode: ".concat(currentNode));
             }

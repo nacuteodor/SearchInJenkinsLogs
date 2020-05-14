@@ -69,13 +69,13 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
         } else {
             String nodeUrlResp;
             try {
-                nodeUrlResp = Main.getUrlResponse(nodeUrl.replace(toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"));
+                nodeUrlResp = Main.getUrlResponse(Main.replaceUrlPrefix(nodeUrl, toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json"), toolArgs.username, toolArgs.password);
             } catch (IOException e) {
                 System.err.println("Got exception when getting API response for node ".concat(nodeUrl).concat(": ").concat(e.toString()));
                 return;
             }
             artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
-            artifactUrlPrefix = toolArgs.newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(nodeUrl.replace(toolArgs.jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
+            artifactUrlPrefix = toolArgs.newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(Main.replaceUrlPrefix(nodeUrl, toolArgs.jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
         }
         for (String artifactRelativePath : artifactsRelativePaths) {
             if (!Main.artifactUrlMatchesFilters(useBackup ? Main.decodeFile(artifactRelativePath) : artifactRelativePath, toolArgs.artifactsFilters)) {
@@ -88,7 +88,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
             } else {
                 String artifactUrl = artifactUrlPrefix + artifactRelativePath.replace(" ", "%20").replace("#", "%23");
                 try {
-                    artifactFileContent = Main.getUrlResponse(artifactUrl);
+                    artifactFileContent = Main.getUrlResponse(artifactUrl, toolArgs.username, toolArgs.password);
                 } catch (IOException e) {
                     System.err.println("Got exception when getting API response for artifact URL ".concat(artifactUrl).concat(": ").concat(e.toString()));
                     continue;
