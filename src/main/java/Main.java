@@ -46,12 +46,14 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.AuthCache;
 import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.w3c.dom.Document;
@@ -79,31 +81,41 @@ public class Main {
     static final String buildParamsJsonPath = "$.actions[*].parameters[*]";
     private static Map<String, String> testsIssuesMap = new HashMap<>();
 
-    static String getUrlResponse(String urlString, String username, String password) throws IOException {
-        URL url = new URL(urlString);
-        if (username == null) {
-            return IOUtils.toString(new InputStreamReader(url.openStream()));
+    static HttpResponse getUrlHttpResponse(HttpGet httpGet, String username, String password) throws IOException {
+        URI uri = httpGet.getURI();
+        if (username != null) {
+            // authenticate
+            HttpHost host = new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme());
+            CredentialsProvider credsProvider = new BasicCredentialsProvider();
+            credsProvider.setCredentials(new AuthScope(uri.getHost(), uri.getPort()), new UsernamePasswordCredentials(username, password));
+            // Create AuthCache instance
+            AuthCache authCache = new BasicAuthCache();
+            // Generate BASIC scheme object and add it to the local auth cache
+            BasicScheme basicAuth = new BasicScheme();
+            authCache.put(host, basicAuth);
+            CloseableHttpClient httpClient = HttpClients.custom().setDefaultCredentialsProvider(credsProvider).build();
+            // Add AuthCache to the execution context
+            HttpClientContext localContext = HttpClientContext.create();
+            localContext.setAuthCache(authCache);
+            HttpResponse response = httpClient.execute(host, httpGet, localContext);
+            return response;
         }
 
-        // authenticate
-        URI uri = URI.create(urlString);
-        HttpHost host = new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme());
-        CredentialsProvider credsProvider = new BasicCredentialsProvider();
-        credsProvider.setCredentials(new AuthScope(uri.getHost(), uri.getPort()), new UsernamePasswordCredentials(username, password));
-        // Create AuthCache instance
-        AuthCache authCache = new BasicAuthCache();
-        // Generate BASIC scheme object and add it to the local auth cache
-        BasicScheme basicAuth = new BasicScheme();
-        authCache.put(host, basicAuth);
-        CloseableHttpClient httpClient = HttpClients.custom().setDefaultCredentialsProvider(credsProvider).build();
-        HttpGet httpGet = new HttpGet(uri);
-        // Add AuthCache to the execution context
-        HttpClientContext localContext = HttpClientContext.create();
-        localContext.setAuthCache(authCache);
+        HttpClient httpClient = HttpClientBuilder.create().build();
+        HttpResponse response = httpClient.execute(httpGet);
+        return response;
+    }
 
-        HttpResponse response = httpClient.execute(host, httpGet, localContext);
-
+    static String getUrlResponse(HttpGet httpGet, String username, String password) throws IOException {
+        if (username == null) {
+            return IOUtils.toString(new InputStreamReader(httpGet.getURI().toURL().openStream()));
+        }
+        HttpResponse response = getUrlHttpResponse( httpGet, username, password);
         return EntityUtils.toString(response.getEntity());
+    }
+
+    static String getUrlResponse(String urlString, String username, String password) throws IOException {
+        return getUrlResponse(new HttpGet(URI.create(urlString)), username, password);
     }
 
     /**
