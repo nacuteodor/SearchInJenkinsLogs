@@ -108,6 +108,7 @@ public class Main {
 
     static String getUrlResponse(HttpGet httpGet, String username, String password) throws IOException {
         if (username == null) {
+            System.out.println("Get response for url: " + httpGet.getURI().toURL().toString());
             return IOUtils.toString(new InputStreamReader(httpGet.getURI().toURL().openStream()));
         }
         HttpResponse response = getUrlHttpResponse( httpGet, username, password);
@@ -281,10 +282,14 @@ public class Main {
             }
             if (toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
                 String stacktrace = failureElement.getTextContent();
+                String[] stacktraceTokens = stacktrace.replace("&#10;", "\n").split("StackTrace:\n");
+                if (stacktraceTokens.length > 1) {
+                    stacktrace = stacktraceTokens[stacktraceTokens.length - 1].trim();
+                }
                 stacktrace = getFirstXLines(stacktrace, 2);
                 stacktrace = stacktrace.trim().isEmpty() ? stacktrace : stacktrace.concat(": ");
                 String failureToCompare = stacktrace.concat(getFirstXLines(message, 1));
-                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, shortTestName, failureToCompare, failureToCompare.length() >= 200 ? failureToCompare.substring(0, 200) + " ..." : failureToCompare));
+                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, shortTestName, failureToCompare, failureToCompare.length() >= 250 ? failureToCompare.substring(0, 250) + " ..." : failureToCompare));
             }
         }
         return new FailuresMatchResult(matchedFailedTests, testsFailures, null);
@@ -334,7 +339,7 @@ public class Main {
                 packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
                 packageName = classNameTokens.length < 2 ? "(root)" : packageName;
                 String className = classNameTokens[classNameTokens.length - 1];
-                String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,-]", "_"));
+                String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,\"'-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
