@@ -15,6 +15,9 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -29,6 +32,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
+import javax.net.ssl.SSLContext;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -49,12 +53,21 @@ import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.config.Registry;
+import org.apache.http.config.RegistryBuilder;
+import org.apache.http.conn.socket.ConnectionSocketFactory;
+import org.apache.http.conn.socket.PlainConnectionSocketFactory;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.TrustStrategy;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.conn.BasicHttpClientConnectionManager;
+import org.apache.http.ssl.SSLContexts;
 import org.apache.http.util.EntityUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -106,15 +119,32 @@ public class Main {
         return response;
     }
 
-    static String getUrlResponse(HttpGet httpGet, String username, String password) throws IOException {
+    static String getUrlResponse(HttpGet httpGet, String username, String password) throws IOException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         if (username == null) {
-            return IOUtils.toString(new InputStreamReader(httpGet.getURI().toURL().openStream()));
+            TrustStrategy acceptingTrustStrategy = (cert, authType) -> true;
+            SSLContext sslContext = SSLContexts.custom().loadTrustMaterial(null, acceptingTrustStrategy).build();
+            SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContext,
+                                                                              NoopHostnameVerifier.INSTANCE);
+
+            Registry<ConnectionSocketFactory> socketFactoryRegistry =
+                RegistryBuilder.<ConnectionSocketFactory> create()
+                    .register("https", sslsf)
+                    .register("http", new PlainConnectionSocketFactory())
+                    .build();
+
+            BasicHttpClientConnectionManager connectionManager =
+                new BasicHttpClientConnectionManager(socketFactoryRegistry);
+            CloseableHttpClient httpClient = HttpClients.custom().setSSLSocketFactory(sslsf)
+                .setConnectionManager(connectionManager).build();
+            HttpResponse response = httpClient.execute(httpGet);
+            //return IOUtils.toString(new InputStreamReader(httpGet.getURI().toURL().openStream()));
+            return IOUtils.toString(new InputStreamReader(response.getEntity().getContent()));
         }
         HttpResponse response = getUrlHttpResponse( httpGet, username, password);
         return EntityUtils.toString(response.getEntity());
     }
 
-    static String getUrlResponse(String urlString, String username, String password) throws IOException {
+    static String getUrlResponse(String urlString, String username, String password) throws IOException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         return getUrlResponse(new HttpGet(URI.create(urlString)), username, password);
     }
 
@@ -436,7 +466,7 @@ public class Main {
         return backupBuilds;
     }
 
-    private static void computeBuilds(ToolArgs toolArgs, Set<Integer> excludedBuilds, Set<Integer> backupBuilds, String jobResponse) throws IOException {
+    private static void computeBuilds(ToolArgs toolArgs, Set<Integer> excludedBuilds, Set<Integer> backupBuilds, String jobResponse) throws IOException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         if (toolArgs.useBackup || toolArgs.backupJob || toolArgs.removeBackup) {
             Validate.notEmpty(toolArgs.backupPath, "backupPath parameter is empty!");
             toolArgs.backupJobDirFile = new File(toolArgs.backupPath + File.separator + encodeFile(toolArgs.jobUrl));
@@ -498,7 +528,7 @@ public class Main {
         System.out.println("Parameter builds=" + sortedBuilds);
     }
 
-    private static Integer submitBuildNodes(CompletionService<JenkinsNodeArtifactsFilter> completionService, ToolArgs toolArgs, Set<Integer> excludedBuilds) throws IOException {
+    private static Integer submitBuildNodes(CompletionService<JenkinsNodeArtifactsFilter> completionService, ToolArgs toolArgs, Set<Integer> excludedBuilds) throws IOException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         String apiJobUrl = replaceUrlPrefix(toolArgs.jobUrl, toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json");
         String jobResponse = getUrlResponse(apiJobUrl, toolArgs.username, toolArgs.password);
         Set<Integer> backupBuilds = new HashSet<>();
@@ -808,7 +838,7 @@ public class Main {
        }
    }
 
-    public static void main(String[] args) throws IOException, CloneNotSupportedException, URISyntaxException {
+    public static void main(String[] args) throws IOException, CloneNotSupportedException, URISyntaxException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         // ======== GET AND PARSE THE ARGUMENTS VALUES ========
         ToolArgs toolArgs = new ToolArgs();
         ToolArgs toolArgs2 = (ToolArgs) toolArgs.clone();

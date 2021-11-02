@@ -147,7 +147,7 @@ public class ToolArgs implements Cloneable {
         System.out.println("Parameter configFile=" + configFile);
         parseConfig();
         username = getNonEmptyValue(USERNAME, username);
-        System.out.println("Parameter ".concat(USERNAME).concat("=").concat(username));
+        System.out.println("Parameter ".concat(USERNAME).concat("=").concat(username + ""));
         password = getNonEmptyValue(PASSWORD, password);
         System.out.println("Parameter ".concat(PASSWORD).concat("=*******"));
         jobUrl = getNonEmptyValue(JOB_URL, jobUrl);
@@ -156,8 +156,8 @@ public class ToolArgs implements Cloneable {
         }
         System.out.println("Parameter ".concat(JOB_URL).concat("=").concat(jobUrl));
         newUrlPrefix = getNonEmptyValue(NEW_URL_PREFIX, newUrlPrefix);
-        System.out.println("Parameter ".concat(NEW_URL_PREFIX).concat("=").concat(newUrlPrefix));
         newUrlPrefix = isEmpty(newUrlPrefix) ? jobUrl : newUrlPrefix;
+        System.out.println("Parameter ".concat(NEW_URL_PREFIX).concat("=").concat(newUrlPrefix));
         jobUrl2 = getNonEmptyValue(JOB_URL2, jobUrl2);
         jobUrl2 = isEmpty(jobUrl2) ? jobUrl : jobUrl2;
         System.out.println("Parameter ".concat(JOB_URL2).concat("=").concat(jobUrl2));

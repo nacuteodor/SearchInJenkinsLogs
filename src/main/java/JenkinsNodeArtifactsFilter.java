@@ -3,6 +3,9 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -43,7 +46,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
     public JenkinsNodeArtifactsFilter call() {
         try {
             processNode();
-        } catch (IOException | ParserConfigurationException | SAXException e) {
+        } catch (IOException | ParserConfigurationException | SAXException | NoSuchAlgorithmException | KeyStoreException | KeyManagementException e) {
             String errorLog = "Exception when when processing node: build: " + buildNumber + " node: " + nodeUrl;
             System.err.println(errorLog + e.getLocalizedMessage());
             throw new RuntimeException(errorLog, e);
@@ -55,7 +58,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
      * Find the searched text @searchedText in the current build node artifacts in a new thread.
      * Saves the artifacts where it finds the @searchedText in matchedArtifacts list
      */
-    private void processNode() throws IOException, ParserConfigurationException, SAXException {
+    private void processNode() throws IOException, ParserConfigurationException, SAXException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException {
         File backupNodeDirFile = new File(backupBuildDirFile + File.separator + nodeUrl);
         if (!useBackup && toolArgs.backupJob) {
             backupNodeDirFile = new File(backupBuildDirFile + File.separator + Main.encodeFile(nodeUrl));
