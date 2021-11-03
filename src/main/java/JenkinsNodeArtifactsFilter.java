@@ -102,7 +102,7 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
             }
             if (toolArgs.searchInJUnitReports || toolArgs.groupTestsFailures || toolArgs.showTestsDifferences || toolArgs.computeStabilityList) {
                 FailuresMatchResult failuresMatchResult = Main.matchJUnitReportFailures(artifactFileContent, buildNumber, nodeUrl, toolArgs);
-                matchedFailedTests.addAll( failuresMatchResult.matchedFailedTests);
+                matchedFailedTests.addAll(failuresMatchResult.matchedFailedTests);
                 testsFailures.putAll(failuresMatchResult.testsFailures);
                 testsStatus.putAll(failuresMatchResult.testsStatus);
                 continue;
