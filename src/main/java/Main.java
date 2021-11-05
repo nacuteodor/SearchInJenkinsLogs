@@ -462,6 +462,7 @@ public class Main {
             List<Integer> allAvailableBuildsList = JsonPath.read(jobResponse, buildsNumberJsonPath);
             final int oneHour = 1000*60*60;
             Set<Integer> validBuilds = new HashSet<>();
+            Long lastBuildTimestamp = null; // the timestamp until when to parse builds
             for (Integer buildNumber : allAvailableBuildsList) {
                 String buildUrl = ((List<String>) JsonPath.read(jobResponse, String.format(buildsNumberUrlJsonPath, buildNumber))).get(0);
                 String buildApiResp;
@@ -474,10 +475,19 @@ public class Main {
                 boolean isValidBuild = true;
                 if (toolArgs.buildsFromLastXHours > 0) {
                     long timestamp = JsonPath.read(buildApiResp, timestampJsonPath);
-                    isValidBuild = ((System.currentTimeMillis() - timestamp) / oneHour <= toolArgs.buildsFromLastXHours);
+                    System.out.println("buildNumber: " + buildNumber + " excludedBuilds.iterator().next(): " + excludedBuilds.iterator().next());
+                    if (buildNumber.equals(excludedBuilds.iterator().next())) {
+                        lastBuildTimestamp = System.currentTimeMillis();
+                        if (toolArgs.previousBuildsOnly && !excludedBuilds.isEmpty()) {
+                            System.out.println("toolArgs.previousBuildsOnly && !excludedBuilds.isEmpty()");
+                            lastBuildTimestamp = timestamp;
+                        }
+                    }
+                    isValidBuild = lastBuildTimestamp != null && (lastBuildTimestamp - timestamp >=0) && ((lastBuildTimestamp - timestamp) / oneHour <= toolArgs.buildsFromLastXHours);
+                    System.out.println("isValidBuild: " + isValidBuild);
                 }
                 if (!isValidBuild) {
-                    break;
+                    continue;
                 }
                 if (!toolArgs.buildParamsFilter.isEmpty()) {
                     List<Map<String, String>> buildParams = JsonPath.read(buildApiResp, buildParamsJsonPath);
