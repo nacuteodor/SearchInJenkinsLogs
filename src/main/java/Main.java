@@ -285,6 +285,11 @@ public class Main {
                 String[] stacktraceTokens = stacktrace.replace("&#10;", "\n").split("StackTrace:\n");
                 if (stacktraceTokens.length > 1) {
                     stacktrace = stacktraceTokens[stacktraceTokens.length - 1].trim();
+                } else {
+                    stacktraceTokens = stacktrace.replace("&#10;", "\n").split("Stack Trace:\n");
+                    if (stacktraceTokens.length > 1) {
+                        stacktrace = stacktraceTokens[stacktraceTokens.length - 1].trim();
+                    }
                 }
                 stacktrace = getFirstXLines(stacktrace, 2);
                 stacktrace = stacktrace.trim().isEmpty() ? stacktrace : stacktrace.concat(": ");
