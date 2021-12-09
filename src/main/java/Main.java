@@ -344,7 +344,7 @@ public class Main {
                 packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
                 packageName = classNameTokens.length < 2 ? "(root)" : packageName;
                 String className = classNameTokens[classNameTokens.length - 1];
-                String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,\"'@=-]", "_"));
+                String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,\"'&@=-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
@@ -480,16 +480,13 @@ public class Main {
                 boolean isValidBuild = true;
                 if (toolArgs.buildsFromLastXHours > 0) {
                     long timestamp = JsonPath.read(buildApiResp, timestampJsonPath);
-                    System.out.println("buildNumber: " + buildNumber + " excludedBuilds.iterator().next(): " + excludedBuilds.iterator().next());
                     if (buildNumber.equals(excludedBuilds.iterator().next())) {
                         lastBuildTimestamp = System.currentTimeMillis();
                         if (toolArgs.previousBuildsOnly && !excludedBuilds.isEmpty()) {
-                            System.out.println("toolArgs.previousBuildsOnly && !excludedBuilds.isEmpty()");
                             lastBuildTimestamp = timestamp;
                         }
                     }
                     isValidBuild = lastBuildTimestamp != null && (lastBuildTimestamp - timestamp >=0) && ((lastBuildTimestamp - timestamp) / oneHour <= toolArgs.buildsFromLastXHours);
-                    System.out.println("isValidBuild: " + isValidBuild);
                 }
                 if (!isValidBuild) {
                     continue;
