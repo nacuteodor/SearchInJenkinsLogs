@@ -344,7 +344,7 @@ public class Main {
                 packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
                 packageName = classNameTokens.length < 2 ? "(root)" : packageName;
                 String className = classNameTokens[classNameTokens.length - 1];
-                String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,\"'&@#=-]", "_"));
+                String testUrl = packageName.concat("/").concat(className).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,\"'&%*^@#=-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
