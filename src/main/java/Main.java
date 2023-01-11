@@ -341,10 +341,12 @@ public class Main {
                 for (int i = 0; i < classNameTokens.length - 1; i++) {
                     packageName += classNameTokens[i].concat(".");
                 }
+                String testCaseClassname = testCaseElement.getAttribute("classname");
+                packageName = testCaseClassname.endsWith(".") ? packageName.concat(classNameTokens[classNameTokens.length - 1]).concat(".") : packageName;
                 packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
                 packageName = classNameTokens.length < 2 ? "(root)" : packageName;
-                String className = classNameTokens[classNameTokens.length - 1];
-                String testUrl = packageName.concat("/").concat(className.replace(":", "_")).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,\"'&%*^<>@#=-]", "_"));
+                String className = testCaseClassname.endsWith(".") ? "" : classNameTokens[classNameTokens.length - 1];
+                String testUrl = packageName.replaceAll("[:#]", "_").concat("/").concat(className.replace(":", "_")).concat("/").concat(shortTestName.replaceAll("[.: \\\\()\\[\\]/,\"'&%*^<>@#=-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
