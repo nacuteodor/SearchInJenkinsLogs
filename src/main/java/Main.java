@@ -117,7 +117,7 @@ public class Main {
     }
 
     static String getUrlResponse(String urlString, String username, String password) throws IOException {
-        return getUrlResponse(new HttpGet(URI.create(urlString)), username, password);
+        return getUrlResponse(new HttpGet(URI.create(urlString)), username, password).replace("the_\"", "the_\\\"").replace("g\"_", "g\\\"_");
     }
 
     /**
