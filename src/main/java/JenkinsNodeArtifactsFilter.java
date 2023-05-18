@@ -1,4 +1,6 @@
+import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.Option;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -74,7 +76,9 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
                 System.err.println("Got exception when getting API response for node ".concat(nodeUrl).concat(": ").concat(e.toString()));
                 return;
             }
-            artifactsRelativePaths = JsonPath.read(nodeUrlResp, Main.artifactsRelativePathJsonPath);
+            Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
+            artifactsRelativePaths = JsonPath.using(conf).parse(nodeUrlResp).read(Main.artifactsRelativePathJsonPath);
+            artifactsRelativePaths = artifactsRelativePaths == null ? new ArrayList<>() : artifactsRelativePaths;
             artifactUrlPrefix = toolArgs.newUrlPrefix.concat("/").concat(buildNumber).concat("/").concat(Main.replaceUrlPrefix(nodeUrl, toolArgs.jobUrl, "").replace(buildNumber.concat("/"), "").concat("/artifact/"));
         }
         for (String artifactRelativePath : artifactsRelativePaths) {
