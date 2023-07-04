@@ -642,7 +642,7 @@ public class Main {
                     testCaseId = testCaseId.split("[,.]")[0];
                     testCaseId = rightTrimPattern.matcher(testCaseId).replaceAll("");
                 }
-                if (issueDescription.getValue().contains(shortTestName) || (testCaseIdMarkerIndex > 0 && issueDescription.getValue().contains(testCaseIdMarker.concat(testCaseId)))) {
+                if (issueDescription.getValue().contains(shortTestName) || (testCaseIdMarkerIndex > 0 && issueDescription.getValue().toUpperCase().contains(testCaseIdMarker.concat(testCaseId).toUpperCase()))) {
                     issuesMap.put(issueDescription.getKey(), toolArgs.jiraUrl.concat("/browse/").concat(issueDescription.getKey()));
                 }
             }
