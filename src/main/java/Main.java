@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -630,8 +631,18 @@ public class Main {
     private static String getIssuesLinks(ToolArgs toolArgs, String shortTestName) {
         if (!testsIssuesMap.containsKey(shortTestName)) {
             Map<String, String> issuesMap = new HashedMap<>();
+            final String testCaseIdMarker = "TestCase ID:";
+            final Pattern rightTrimPattern = Pattern.compile("\\s*$");
             for (Map.Entry<String, String> issueDescription : toolArgs.issueDescriptionMap.entrySet()) {
-                if (issueDescription.getValue().contains(shortTestName)) {
+                int testCaseIdMarkerIndex = shortTestName.indexOf(testCaseIdMarker);
+                String testCaseId = null;
+                if (testCaseIdMarkerIndex > 0) {
+                    testCaseId = shortTestName.substring(testCaseIdMarkerIndex);
+                    testCaseId = testCaseId.substring(shortTestName.indexOf(":") + 1);
+                    testCaseId = testCaseId.split("[,.]")[0];
+                    testCaseId = rightTrimPattern.matcher(testCaseId).replaceAll("");
+                }
+                if (issueDescription.getValue().contains(shortTestName) || (testCaseIdMarkerIndex > 0 && issueDescription.getValue().contains(testCaseIdMarker.concat(testCaseId)))) {
                     issuesMap.put(issueDescription.getKey(), toolArgs.jiraUrl.concat("/browse/").concat(issueDescription.getKey()));
                 }
             }
