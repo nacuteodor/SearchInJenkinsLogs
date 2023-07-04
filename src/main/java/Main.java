@@ -636,9 +636,9 @@ public class Main {
             for (Map.Entry<String, String> issueDescription : toolArgs.issueDescriptionMap.entrySet()) {
                 int testCaseIdMarkerIndex = shortTestName.indexOf(testCaseIdMarker);
                 String testCaseId = null;
-                if (testCaseIdMarkerIndex > 0) {
+                if (testCaseIdMarkerIndex >= 0) {
                     testCaseId = shortTestName.substring(testCaseIdMarkerIndex);
-                    testCaseId = testCaseId.substring(shortTestName.indexOf(":") + 1);
+                    testCaseId = testCaseId.substring(testCaseId.indexOf(":") + 1);
                     testCaseId = testCaseId.split("[,.]")[0];
                     testCaseId = rightTrimPattern.matcher(testCaseId).replaceAll("");
                 }
