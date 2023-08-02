@@ -347,7 +347,7 @@ public class Main {
                 packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
                 packageName = classNameTokens.length < 2 ? "(root)" : packageName;
                 String className = testCaseClassname.endsWith(".") ? "" : classNameTokens[classNameTokens.length - 1];
-                String testUrl = packageName.replaceAll("[:#]", "_").concat("/").concat(className.replaceAll("[:/<>]", "_").replace("\"", "%22")).concat("/").concat(shortTestName.replaceAll("[\\{\\}.:+\\r\\n |\\\\()\\[\\]/,\"'&%*^<>@#=-]", "_"));
+                String testUrl = packageName.replaceAll("[:#/]", "_").concat("/").concat(className.replaceAll("[:/<>]", "_").replace("\"", "%22")).concat("/").concat(shortTestName.replaceAll("[\\{\\}.:+\\r\\n |\\\\()\\[\\]/,\"'&%*^<>@#=-]", "_"));
                 Integer testCount = testsCount.get(testUrl);
                 testCount = testCount == null ? 0 : testCount;
                 testsCount.put(testUrl, ++testCount);
