@@ -28,6 +28,11 @@ java -DjobUrl="https://jenkins.com/job/JobName/" -DnewUrlPrefix="http://jenkins-
 - you could use it to find crashes or exceptions that appear in the app logs while running the UI tests. 
 For iOS app system logs, you could use this regular expression: -DsearchedText="(.\*Terminating app due to uncaught exception.\*)|(.\*${AppName}\\[[0-9]\*\\]: fatal error:.\*)" , where ${AppName} is the name of the tested iOS app.
 
+## Generating failures triage report:
+Use [generate_failures_triage_report.sh](https://github.com/nacuteodor/SearchInJenkinsLogs/blob/master/generate_failures_triage_report.sh) script to create a Jenkins job that will generate a html triage report with all the failures and 3 tables:
+ * grouping common failures - the 1st table;
+ * comparison of the current build with the runs from the last 5 days: the new failed tests - the 2nd table; the failed tests with different failure message - the 3-rd table.;
+  
 ## IDE:
 Easy to integrate the project with Intellij, JDK 8.
 
