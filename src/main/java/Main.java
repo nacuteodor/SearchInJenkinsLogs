@@ -646,8 +646,11 @@ public class Main {
                     issuesMap.put(issueDescription.getKey(), toolArgs.jiraUrl.concat("/browse/").concat(issueDescription.getKey()));
                 }
             }
+            // sort the Jira issues in descendant order
+            Map.Entry<String, String>[] sortedIssuesArray = issuesMap.entrySet().toArray(new Map.Entry[0]);
+            Arrays.parallelSort(sortedIssuesArray, (o1, o2) -> o2.getKey().compareTo(o1.getKey()));
             String issuesLinks = "";
-            for (Map.Entry<String, String> entry : issuesMap.entrySet()) {
+            for (Map.Entry<String, String> entry : sortedIssuesArray) {
                 issuesLinks = issuesLinks.concat("<a href=\"").concat(entry.getValue()).concat("\">").concat(entry.getKey()).concat("</a>&#44;&nbsp;");
             }
             if (!issuesLinks.isEmpty()) {
