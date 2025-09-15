@@ -402,7 +402,7 @@ public class ToolArgs implements Cloneable {
 
         Map<String, String> issueDescriptionMap = new HashedMap<>();
         boolean paginationFinished = false;
-        String nextPageToken = null;
+        String nextPageToken = "";
         while (!paginationFinished) {
             // added pagination calls (which are limited to 50 maxResults) to be able to get all the jira issues.
             request.setURI(new URI(queryUrl.concat("&").concat("maxResults=50").concat("&").concat("nextPageToken=").concat(String.valueOf(nextPageToken))));
