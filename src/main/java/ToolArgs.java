@@ -392,6 +392,7 @@ public class ToolArgs implements Cloneable {
         String queryUrl = jiraApiUrl.concat("/search/jql?jql=").concat(URLEncoder.encode(jiraJql, CharEncoding.UTF_8).replace("+", "%20"));
         System.out.println("Jira query url: ".concat(queryUrl));
 
+        Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
         HttpGet request = new HttpGet(queryUrl);
 
         // add request headers
@@ -417,7 +418,8 @@ public class ToolArgs implements Cloneable {
             for (Map<String, Object> issue : issues) {
                 String issueId = (String) issue.get("key");
                 Object fields = issue.get("fields");
-                String description = JsonPath.read(fields, "$.description").toString();
+                Object descriptionObject = JsonPath.using(conf).parse(fields).read("$.description");
+                String description = descriptionObject == null ? "" : descriptionObject.toString();
                 String labels = JsonPath.read(fields, "$.labels").toString();
                 issueDescriptionMap.put(issueId, labels.concat("\n") + description);
             }
