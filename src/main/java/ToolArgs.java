@@ -405,7 +405,7 @@ public class ToolArgs implements Cloneable {
         String nextPageToken = null;
         while (!paginationFinished) {
             // added pagination calls (which are limited to 50 maxResults) to be able to get all the jira issues.
-            request.setURI(new URI(queryUrl.concat("&").concat("maxResults=50").concat("nextPageToken=").concat(String.valueOf(nextPageToken))));
+            request.setURI(new URI(queryUrl.concat("&").concat("maxResults=50").concat("&").concat("nextPageToken=").concat(String.valueOf(nextPageToken))));
             HttpResponse response = Main.getUrlHttpResponse(request, jiraUsername, jiraPassword);
             String pageResp = IOUtils.toString(response.getEntity().getContent());
             System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
