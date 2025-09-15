@@ -389,7 +389,7 @@ public class ToolArgs implements Cloneable {
     }
 
     private Map<String, String> getJiraIssues() throws IOException, URISyntaxException {
-        String queryUrl = jiraApiUrl.concat("/search/?jql=").concat(URLEncoder.encode(jiraJql, CharEncoding.UTF_8).replace("+", "%20"));
+        String queryUrl = jiraApiUrl.concat("/search/jql?jql=").concat(URLEncoder.encode(jiraJql, CharEncoding.UTF_8).replace("+", "%20"));
         System.out.println("Jira query url: ".concat(queryUrl));
 
         HttpGet request = new HttpGet(queryUrl);
@@ -401,15 +401,14 @@ public class ToolArgs implements Cloneable {
         request.addHeader("Content-Type", "application/json");
 
         Map<String, String> issueDescriptionMap = new HashedMap<>();
-        int startAt = 0;
         boolean paginationFinished = false;
+        String nextPageToken = null;
         while (!paginationFinished) {
             // added pagination calls (which are limited to 50 maxResults) to be able to get all the jira issues.
-            request.setURI(new URI(queryUrl.concat("&").concat("startAt=").concat(String.valueOf(startAt))));
+            request.setURI(new URI(queryUrl.concat("&").concat("maxResults=50").concat("nextPageToken=").concat(String.valueOf(nextPageToken))));
             HttpResponse response = Main.getUrlHttpResponse(request, jiraUsername, jiraPassword);
             String pageResp = IOUtils.toString(response.getEntity().getContent());
             System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
-            startAt = startAt + (int) JsonPath.read(pageResp, "$.maxResults");
             List<Map<String, Object>> issues = JsonPath.read(pageResp, "$.issues[*]");
             for (Map<String, Object> issue : issues) {
                 String issueId = (String) issue.get("key");
@@ -418,8 +417,9 @@ public class ToolArgs implements Cloneable {
                 String labels = JsonPath.read(fields, "$.labels").toString();
                 issueDescriptionMap.put(issueId, labels.concat("\n") + description);
             }
-            if (startAt > (int) JsonPath.read(pageResp, "$.total")) {
-                paginationFinished = true;
+            paginationFinished = JsonPath.read(pageResp, "$.isLast");
+            if (!paginationFinished) {
+                nextPageToken = JsonPath.read(pageResp, "$.nextPageToken").toString();
             }
         }
         System.out.println("Issues found: ".concat(issueDescriptionMap.keySet().toString()));
