@@ -91,32 +91,66 @@ set -o pipefail && java -DjobUrl="${JENKINS_URL}job/$TESTS_JOB/" \
 
 # enhance the html report styling
 styleContent="<style> \
-  body {font-family: \"Lato\", sans-serif;} \
-  table { \
-      border-collapse: collapse; \
-      width: 100%; \
-  } \
-  table, td { \
-      border: 1px solid #ccc; \
-  } \
-  td { \
-      height: 15px; \
-      padding: 5px; \
-      word-wrap: break-word; \
-  } \
-  // td:first-child { width: 15%; } \
-  td:first-child { width: 48em; min-width: 48em; max-width: 48em; } \
-  td:nth-child(3) { width: 48em; min-width: 48em; max-width: 48em; } \
-  // td:nth-child(3){ width: 15%; } \
-  // td:last-child { width: 6%; } \
-  td:last-child { width: 8em; min-width: 8em; max-width: 8em; } \
-  tr:nth-of-type(odd) { \
-    background-color:#f2f2f2; \
-  } \
-  tr:nth-of-type(even) { \
-    background-color:#fff; \
-  } \
-</style>"
+body {font-family: \"Lato\", sans-serif; margin: 0; padding: 0; overflow-x: hidden;} \
+table { border-collapse: collapse; width: 100%; box-sizing: border-box; table-layout: fixed; } \
+table, td, th { border: 1px solid #ccc; } \
+td, th { height: 15px; padding: 5px; word-wrap: break-word; overflow-wrap: break-word; } \
+table:first-of-type td:nth-child(2), table:first-of-type th:nth-child(2) { \
+    width: 3em; min-width: 2em; max-width: 4em; text-align: center; \
+} \
+table:first-of-type td:nth-child(4), table:first-of-type th:nth-child(4) { \
+    width: 3em; min-width: 2em; max-width: 4em; text-align: center; \
+} \
+table:first-of-type td:nth-child(5), table:first-of-type th:nth-child(5) { \
+    width: 7em; min-width: 2em; max-width: 7em; text-align: center; \
+} \
+table:not(:first-of-type) td:nth-child(2), table:not(:first-of-type) th:nth-child(2) { \
+    width: auto; \
+} \
+table:not(:first-of-type) td:nth-child(3), table:not(:first-of-type) th:nth-child(3) { \
+    width: 7em; min-width: 2em; max-width: 7em; text-align: center; \
+} \
+tr:nth-of-type(odd) { background-color:#f2f2f2; } \
+tr:nth-of-type(even) { background-color:#fff; } \
+@media (max-width: 900px) { \
+    html, body { \
+        margin: 0; \
+        padding: 0; \
+        overflow-x: hidden; \
+    } \
+    table { \
+        width: 100%; \
+        table-layout: fixed; \
+    } \
+    thead { \
+        display: none; \
+    } \
+    tr { \
+        display: block; \
+        margin-bottom: 1em; \
+        background-color: #f2f2f2; \
+        border-radius: 10px; \
+        padding: 0.5em 0.3em; \
+        box-shadow: none; \
+        width: 100%; \
+    } \
+    td { \
+        display: block; \
+        border: none; \
+        position: relative; \
+        min-height: 2em; \
+        font-size: 1em; \
+        width: 100%; \
+        background-color: #fff; \
+        padding: 0.5em 0.3em; \
+    } \
+    td a, td a:visited { \
+        font-size: 0.98em; \
+        word-break: break-all; \
+        padding: 0.1em 0; \
+    } \
+} \
+ </style>"
 htmlHeader="<html><head><base target=\"_blank\">${styleContent}</head><body><h2> Tests Failures Triage Report </h2>"
 htmlFooter="</body></html>"
 echo $htmlHeader > $resultsHtmlReport
