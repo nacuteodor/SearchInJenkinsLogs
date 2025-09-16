@@ -410,8 +410,8 @@ public class ToolArgs implements Cloneable {
             HttpResponse response = Main.getUrlHttpResponse(request, jiraUsername, jiraPassword);
             String pageResp = IOUtils.toString(response.getEntity().getContent());
             System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
-            System.out.println("Jira call response error: " + pageResp);
             if (response.getStatusLine().getStatusCode() != 200) {
+                System.out.println("Jira call response error: " + pageResp);
                 return issueDescriptionMap;
             }
             List<Map<String, Object>> issues = JsonPath.read(pageResp, "$.issues[*]");
