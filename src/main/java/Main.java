@@ -29,6 +29,7 @@ import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -66,6 +67,9 @@ import org.xml.sax.SAXException;
 import static org.apache.commons.lang3.math.NumberUtils.min;
 
 /**
+ * Runs Jenkins artifact searches, failure triage, backups, and stability calculations.
+ * Also supplies the shared JUnit parsing and report-generation logic used by GitHub Actions.
+ *
  * Created by Teo on 7/30/2016.
  * A tool to be run for a Jenkins job to search a text with regular expressions in build artifacts.
  * Command line e.g:
@@ -80,8 +84,16 @@ public class Main {
     static final String timestampJsonPath = "$.timestamp";
     static final String buildsNumberUrlJsonPath = "$.builds[?(@.number == %d)].url";
     static final String buildParamsJsonPath = "$.actions[*].parameters[*]";
-    private static Map<String, String> testsIssuesMap = new HashMap<>();
 
+    /**
+     * Executes an HTTP GET, using preemptive Basic authentication when a username is supplied.
+     *
+     * @param httpGet request to execute
+     * @param username authentication username, or {@code null} for anonymous access
+     * @param password authentication password or API token
+     * @return the HTTP response, including its status and entity
+     * @throws IOException if the request cannot be executed
+     */
     static HttpResponse getUrlHttpResponse(HttpGet httpGet, String username, String password) throws IOException {
         URI uri = httpGet.getURI();
         if (username != null) {
@@ -107,6 +119,15 @@ public class Main {
         return response;
     }
 
+    /**
+     * Reads a GET response as text, optionally using Basic authentication.
+     *
+     * @param httpGet request identifying the resource
+     * @param username authentication username, or {@code null} for a direct URL stream
+     * @param password authentication password or API token
+     * @return response body text
+     * @throws IOException if the response cannot be fetched or read
+     */
     static String getUrlResponse(HttpGet httpGet, String username, String password) throws IOException {
         if (username == null) {
             System.out.println("Get response for url: " + httpGet.getURI().toURL().toString());
@@ -116,12 +137,27 @@ public class Main {
         return EntityUtils.toString(response.getEntity());
     }
 
+    /**
+     * Fetches response text for a URL using the configured optional credentials.
+     *
+     * @param urlString resource URL
+     * @param username authentication username, or {@code null} for anonymous access
+     * @param password authentication password or API token
+     * @return response body text
+     * @throws IOException if fetching or reading the response fails
+     */
     static String getUrlResponse(String urlString, String username, String password) throws IOException {
         return getUrlResponse(new HttpGet(URI.create(urlString)), username, password);
     }
 
     /**
-     *  Replace the prefix @prefixUrl from url with @newPrefixUrl
+    * Rewrites a URL prefix, first normalizing its explicit port to the original prefix's port.
+    *
+    * @param url URL to rewrite
+    * @param prefixUrl original URL prefix
+    * @param newPrefixUrl replacement prefix
+    * @return the rewritten URL
+    * @throws MalformedURLException if the URL or original prefix cannot be parsed
      */
     static String replaceUrlPrefix(String url, String prefixUrl, String newPrefixUrl) throws MalformedURLException {
         URL urlObj = new URL(url);
@@ -135,7 +171,11 @@ public class Main {
     }
 
     /**
-     * @return true if @artifactUrl matches regular expressions @artifactFilters filters separated by comma ","
+    * Checks an artifact path against comma-separated regular expressions.
+    *
+    * @param artifactUrl artifact path or URL to match
+    * @param artifactFilters comma-separated expressions; an empty first filter accepts everything
+    * @return whether any expression matches the entire artifact path
      */
     static Boolean artifactUrlMatchesFilters(String artifactUrl, String artifactFilters) {
         String[] filters = artifactFilters.split(",");
@@ -151,7 +191,11 @@ public class Main {
     }
 
     /**
-     * @return true if @buildParams matches all parameter values from @buildParamsFilter map
+    * Checks that a build supplies every requested parameter name/value pair.
+    *
+    * @param buildParams Jenkins parameter entries containing {@code name} and {@code value}
+    * @param buildParamsFilter requested exact parameter values
+    * @return whether every filter entry has a matching build parameter
      */
     private static boolean matchesBuildParams(List<Map<String, String>> buildParams, Map<String, String> buildParamsFilter) {
         boolean matches = true;
@@ -173,15 +217,25 @@ public class Main {
         return matches;
     }
 
+    /**
+     * Matches a regular expression against the full content after removing line breaks.
+     *
+     * @param searchedText expression to match, or empty to accept all content
+     * @param content text to search
+     * @return whether the normalized content matches the expression
+     */
     static Boolean findSearchedTextInContent(String searchedText, String content) {
         // replaces end of line chars with empty to be able to match all file contain with regular expression
         return (searchedText.isEmpty() || content.replaceAll("\\r\\n", "").replaceAll("\\n", "").matches(searchedText));
     }
 
     /**
-     * Encodes "\n" characters between <failure...</failure> with "&#10;", so those won't be replaced with space char when parsing the xml document
+    * Preserves up to ten newlines per matching failure/error section as {@code &#10;} references.
+    * This prevents XML attribute normalization from replacing those newlines with spaces.
      *
      * @param xml the xml as String, we need to transform
+    * @param failureTag opening-tag prefix that begins a matching section
+    * @param failureEndTag closing tag that ends the section
      * @return a new xml
      */
     private static String encodeNewLineCharInFailureElement(String xml, String failureTag, String failureEndTag) {
@@ -231,20 +285,47 @@ public class Main {
         return newXml.toString();
     }
 
+    /**
+     * Preserves newlines in failure and error sections whose opening tags begin with a message attribute.
+     *
+     * @param xml JUnit report text to transform
+     * @return XML with selected newline characters encoded as character references
+     */
     private static String encodeNewLineCharInFailureElements(String xml) {
         String newXml = encodeNewLineCharInFailureElement(xml, "<failure message=", "</failure>");
         newXml = encodeNewLineCharInFailureElement(newXml, "<error message=", "</error>");
         return newXml;
     }
 
+    /**
+     * Builds a Jenkins JUnit report URL, including placeholders for empty path components.
+     *
+     * @param node Jenkins node URL prefix
+     * @param test package/class/test path
+     * @return link to the Jenkins test report
+     */
     private static String buildTestReportLink(String node, String test) {
         return node.concat("testReport/junit/".concat(test).replace("//", "/(empty)/"));
     }
 
+    /**
+     * Builds a Jenkins artifact download URL.
+     *
+     * @param node Jenkins node URL prefix
+     * @param artifactPath artifact path relative to the node
+     * @return link to the artifact
+     */
     private static String buildArtifactLink(String node, String artifactPath) {
         return node.concat("artifact/").concat(artifactPath);
     }
 
+    /**
+     * Takes a prefix of the text's newline-separated lines.
+     *
+     * @param text input text
+     * @param linesCount maximum number of lines to retain
+     * @return selected lines, each followed by a newline
+     */
     private static String getFirstXLines(String text, int linesCount) {
         String[] tokens = text.split("\\n");
         String firstXLines = "";
@@ -255,18 +336,22 @@ public class Main {
     }
 
     /**
-     * Matches the @searchedText in each test failure for a test and return a list with the Jenkins links to the failed tests reports
+    * Scans failure/error nodes for one test and constructs normalized failure observations.
+    * Applies optional stability filtering and retains search matches separately from failures.
+    * Summaries start at the first stack frame in the first labeled trace block when available.
+    * Encoded newlines are normalized before selecting lines and applying the display length limit.
      *
      * @param failureNodes the xml failure/error nodes for a test case element
-     * @param testUrl      the test url
+    * @param testUrl      test identity used as a multimap key
+    * @param testName     qualified test name for reports and stability filtering
+    * @param shortTestName original test name for issue matching
      * @param buildNumber  build number
-     * @param nodeUrl      node URL
-     * @param toolArgs:    toolArgs.searchInJUnitReports true if we search a regular expression in failure messages
-     *                     toolArgs.groupTestsFailures true if it groups failures based on stacktrace and failure message
-     *                     toolArgs.searchedText the regular expression to match with the failure message
-     * @return a list with the Jenkins links to the failed tests reports
+    * @param nodeUrl      Jenkins node URL or GitHub artifact URL
+    * @param toolArgs     search, grouping, comparison, and stability options
+    * @param githubActions whether report links should point directly to GitHub artifacts
+    * @return matched identities and failure observations; stability observations are not collected here
      */
-    private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String testName, String shortTestName, String buildNumber, String nodeUrl, ToolArgs toolArgs) {
+    private static FailuresMatchResult matchTestCaseFailures(NodeList failureNodes, String testUrl, String testName, String shortTestName, String buildNumber, String nodeUrl, ToolArgs toolArgs, boolean githubActions) {
         List<String> matchedFailedTests = new ArrayList<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
         if (failureNodes.getLength() > 0 && toolArgs.stableReport != null) {
@@ -277,57 +362,104 @@ public class Main {
         }
         for (int failureNodeIndex = 0; failureNodeIndex < failureNodes.getLength(); failureNodeIndex++) {
             Element failureElement = (Element) failureNodes.item(failureNodeIndex);
-            String message = failureElement.getAttribute("message");
+            String message = normalizeFailureText(failureElement.getAttribute("message"));
             if (toolArgs.searchInJUnitReports && Main.findSearchedTextInContent(toolArgs.searchedText, message)) {
                 matchedFailedTests.add(testUrl);
             }
             if (toolArgs.groupTestsFailures || toolArgs.showTestsDifferences) {
-                String stacktrace = failureElement.getTextContent();
-                String[] stacktraceTokens = stacktrace.replace("&#10;", "\n").split("StackTrace:\n");
+                String stacktrace = normalizeFailureText(failureElement.getTextContent());
+                String[] stacktraceTokens = stacktrace.split("Stack ?Trace:\\h*\\n");
                 if (stacktraceTokens.length > 1) {
-                    stacktrace = stacktraceTokens[stacktraceTokens.length - 1].trim();
-                } else {
-                    stacktraceTokens = stacktrace.replace("&#10;", "\n").split("Stack Trace:\n");
-                    if (stacktraceTokens.length > 1) {
-                        stacktrace = stacktraceTokens[stacktraceTokens.length - 1].trim();
-                    }
+                    stacktrace = stacktraceTokens[1];
                 }
-                stacktrace = getFirstXLines(stacktrace, 2);
+                Matcher firstFrame = Pattern.compile("(?m)^\\h*at\\h+\\S").matcher(stacktrace);
+                if (firstFrame.find()) {
+                    stacktrace = stacktrace.substring(firstFrame.start());
+                }
+                stacktrace = getFirstXLines(stacktrace.trim(), 1);
                 stacktrace = stacktrace.trim().isEmpty() ? stacktrace : stacktrace.concat(": ");
                 String failureToCompare = stacktrace.concat(getFirstXLines(message, 1));
-                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, buildTestReportLink(nodeUrl, testUrl), testName, shortTestName, failureToCompare, failureToCompare.length() >= 250 ? failureToCompare.substring(0, 250) + " ..." : failureToCompare));
+                testsFailures.put(testUrl, new TestFailure(buildNumber, nodeUrl, githubActions ? nodeUrl : buildTestReportLink(nodeUrl, testUrl), testName, shortTestName, failureToCompare, failureToCompare.length() >= 250 ? failureToCompare.substring(0, 250) + " ..." : failureToCompare));
             }
         }
         return new FailuresMatchResult(matchedFailedTests, testsFailures, null);
     }
 
     /**
-     * Matches the @searchedText in each test failure and return a list with the Jenkins links to the failed tests reports
+     * Decodes up to four HTML-entity layers and normalizes line endings before failure summarization.
+     * Repeated decoding handles nested escapes while bounding work on deeply escaped input.
+     * The resulting plain text must still be escaped when inserted into HTML.
+     *
+     * @param text message or stacktrace obtained from the parsed JUnit XML
+     * @return decoded plain text using newline characters for line breaks
+     */
+    private static String normalizeFailureText(String text) {
+        for (int layer = 0; layer < 4; layer++) {
+            String decoded = StringEscapeUtils.unescapeHtml4(text);
+            if (decoded.equals(text)) {
+                break;
+            }
+            text = decoded;
+        }
+        return text.replace("\r\n", "\n").replace('\r', '\n');
+    }
+
+    /**
+    * Parses a JUnit report using Jenkins-compatible test identities and report links.
      *
      * @param jUnitReportXml the JUnit xml report as a String
      * @param buildNumber    build number
      * @param nodeUrl        node URL
-     * @param toolArgs:      toolArgs.searchInJUnitReports true if we search a regular expression in failure messages
-     *                       toolArgs.groupTestsFailures true if it groups failures based on stacktrace and failure message
-     *                       toolArgs.searchedText the regular expression to match with the failure message
-     * @return a list with the Jenkins links to the failed tests reports
-     * @throws ParserConfigurationException
-     * @throws IOException
-     * @throws SAXException
+    * @param toolArgs       search, triage, and stability options
+    * @return matched test identities, failure/error observations, and optional stability data
+    * @throws ParserConfigurationException if the XML parser cannot be configured
+    * @throws IOException if the XML input cannot be read
+    * @throws SAXException if the XML is malformed or contains a forbidden DOCTYPE
      */
     static FailuresMatchResult matchJUnitReportFailures(String jUnitReportXml, String buildNumber, String nodeUrl, ToolArgs toolArgs) throws ParserConfigurationException, IOException, SAXException {
+        return matchJUnitReportFailures(jUnitReportXml, buildNumber, nodeUrl, toolArgs, false);
+    }
+
+    /**
+     * Parses JUnit cases with external XML entities disabled.
+     * Failures and errors contribute triage observations; skipped cases do not.
+     * GitHub mode validates the report root and uses structured suite/class/test identities.
+     *
+     * @param jUnitReportXml JUnit report text
+     * @param buildNumber Jenkins build number or GitHub run number
+     * @param nodeUrl Jenkins node URL or GitHub artifact URL
+     * @param toolArgs search, triage, and stability options
+     * @param githubActions whether to use GitHub identities and artifact links
+     * @return matches, failures, and any requested stability observations
+     * @throws ParserConfigurationException if secure XML parser configuration fails
+     * @throws IOException if the XML input cannot be read
+     * @throws SAXException if XML is malformed or forbidden, or GitHub input is empty/non-JUnit
+     */
+    static FailuresMatchResult matchJUnitReportFailures(String jUnitReportXml, String buildNumber, String nodeUrl, ToolArgs toolArgs, boolean githubActions) throws ParserConfigurationException, IOException, SAXException {
         List<String> matchedFailedTests = new ArrayList<>();
         Map<String, Integer> testsCount = new HashedMap<>();
         ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
         ArrayListValuedHashMap<String, TestStatus> testsStatus = new ArrayListValuedHashMap<>();
         // if the JUnit report is empty we cannot parse it
         if (jUnitReportXml.isEmpty()) {
+            if (githubActions) {
+                throw new SAXException("JUnit report is empty");
+            }
             return new FailuresMatchResult(matchedFailedTests, testsFailures, testsStatus);
         }
         DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        dbFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        dbFactory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        dbFactory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        dbFactory.setXIncludeAware(false);
+        dbFactory.setExpandEntityReferences(false);
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
         jUnitReportXml = encodeNewLineCharInFailureElements(jUnitReportXml);
-        Document doc = dBuilder.parse(new ByteArrayInputStream(jUnitReportXml.getBytes()));
+        Document doc = dBuilder.parse(new ByteArrayInputStream(jUnitReportXml.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String rootName = doc.getDocumentElement().getTagName();
+        if (githubActions && !"testsuite".equals(rootName) && !"testsuites".equals(rootName)) {
+            throw new SAXException("Expected a JUnit testsuite or testsuites root, found " + rootName);
+        }
         doc.getDocumentElement().normalize();
         NodeList testCasesList = doc.getElementsByTagName("testcase");
         for (int testCaseIndex = 0; testCaseIndex < testCasesList.getLength(); testCaseIndex++) {
@@ -336,33 +468,43 @@ public class Main {
                 Element testCaseElement = (Element) testCaseNode;
                 String shortTestName = testCaseElement.getAttribute("name");
                 String testName = testCaseElement.getAttribute("classname").concat(".").concat(shortTestName);
-                String[] classNameTokens  = testCaseElement.getAttribute("classname").split("\\.");
-                // the package name from url needs to remain with ".", the class name is delimited using "/"
-                String packageName = "";
-                for (int i = 0; i < classNameTokens.length - 1; i++) {
-                    packageName += classNameTokens[i].concat(".");
+                String testUrl;
+                if (githubActions) {
+                    List<String> identity = new ArrayList<>();
+                    for (Node parent = testCaseElement.getParentNode(); parent instanceof Element; parent = parent.getParentNode()) {
+                        if ("testsuite".equals(parent.getNodeName())) {
+                            identity.add(0, ((Element) parent).getAttribute("name"));
+                        }
+                    }
+                    identity.add(testCaseElement.getAttribute("classname"));
+                    identity.add(shortTestName);
+                    testUrl = Configuration.defaultConfiguration().jsonProvider().toJson(identity);
+                } else {
+                    String[] classNameTokens  = testCaseElement.getAttribute("classname").split("\\.");
+                    // the package name from url needs to remain with ".", the class name is delimited using "/"
+                    String packageName = "";
+                    for (int i = 0; i < classNameTokens.length - 1; i++) {
+                        packageName += classNameTokens[i].concat(".");
+                    }
+                    String testCaseClassname = testCaseElement.getAttribute("classname");
+                    packageName = testCaseClassname.endsWith(".") ? packageName.concat(classNameTokens[classNameTokens.length - 1]).concat(".") : packageName;
+                    packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
+                    packageName = classNameTokens.length < 2 ? "(root)" : packageName;
+                    String className = testCaseClassname.endsWith(".") ? "" : classNameTokens[classNameTokens.length - 1];
+                    testUrl = packageName.replaceAll("[:#/]", "_").concat("/").concat(className.replaceAll("[:#/<>]", "_").replace("\"", "%22")).concat("/").concat(shortTestName.replaceAll("[\\{\\}.:;+\\r\\n |\\\\()\\[\\]/,\"'&%*^<>@#=-]", "_"));
+                    Integer testCount = testsCount.get(testUrl);
+                    testCount = testCount == null ? 0 : testCount;
+                    testsCount.put(testUrl, ++testCount);
+                    testUrl = testCount < 2 ? testUrl : testUrl.concat("_").concat(String.valueOf(testCount));
                 }
-                String testCaseClassname = testCaseElement.getAttribute("classname");
-                packageName = testCaseClassname.endsWith(".") ? packageName.concat(classNameTokens[classNameTokens.length - 1]).concat(".") : packageName;
-                packageName = packageName.length() > 0 ? new StringBuilder(packageName).deleteCharAt(packageName.length() - 1).toString() : packageName;
-                packageName = classNameTokens.length < 2 ? "(root)" : packageName;
-                String className = testCaseClassname.endsWith(".") ? "" : classNameTokens[classNameTokens.length - 1];
-                String testUrl = packageName.replaceAll("[:#/]", "_").concat("/").concat(className.replaceAll("[:#/<>]", "_").replace("\"", "%22")).concat("/").concat(shortTestName.replaceAll("[\\{\\}.:;+\\r\\n |\\\\()\\[\\]/,\"'&%*^<>@#=-]", "_"));
-                Integer testCount = testsCount.get(testUrl);
-                testCount = testCount == null ? 0 : testCount;
-                testsCount.put(testUrl, ++testCount);
-                testUrl = testCount < 2 ? testUrl : testUrl.concat("_").concat(String.valueOf(testCount));
                 NodeList failureNodes = testCaseElement.getElementsByTagName("failure");
-                FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, testName, shortTestName, buildNumber, nodeUrl, toolArgs);
+                FailuresMatchResult failuresMatchResult = matchTestCaseFailures(failureNodes, testUrl, testName, shortTestName, buildNumber, nodeUrl, toolArgs, githubActions);
                 matchedFailedTests.addAll(failuresMatchResult.matchedFailedTests);
                 testsFailures.putAll(failuresMatchResult.testsFailures);
                 NodeList errorNodes = testCaseElement.getElementsByTagName("error");
-                FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, testName, shortTestName, buildNumber, nodeUrl, toolArgs);
+                FailuresMatchResult errorsMatchResult = matchTestCaseFailures(errorNodes, testUrl, testName, shortTestName, buildNumber, nodeUrl, toolArgs, githubActions);
                 matchedFailedTests.addAll(errorsMatchResult.matchedFailedTests);
-                NodeList skippedNodes = testCaseElement.getElementsByTagName("skipped");
-                FailuresMatchResult skippedMatchResult = matchTestCaseFailures(skippedNodes, testUrl, testName, shortTestName, buildNumber, nodeUrl, toolArgs);
-                matchedFailedTests.addAll(skippedMatchResult.matchedFailedTests);
-                testsFailures.putAll(skippedMatchResult.testsFailures);
+                testsFailures.putAll(errorsMatchResult.testsFailures);
                 if (toolArgs.computeStabilityList) {
                     String stabilityTestName = testCaseElement.getAttribute("classname").concat("&").concat(shortTestName);
                     Boolean failedStatus = failureNodes.getLength() != 0 || errorNodes.getLength() != 0;
@@ -374,14 +516,42 @@ public class Main {
         return new FailuresMatchResult(matchedFailedTests, testsFailures, testsStatus);
     }
 
+    /**
+     * URL-encodes a path for use as a backup filename using the platform charset.
+     *
+     * @param file path or URL to encode
+     * @return encoded filename component
+     * @throws UnsupportedEncodingException if the platform charset is unavailable
+     */
     static String encodeFile(String file) throws UnsupportedEncodingException {
         return URLEncoder.encode(file, Charset.defaultCharset().name());
     }
 
+    /**
+     * Decodes a backup filename using the platform charset.
+     *
+     * @param file encoded filename component
+     * @return original path or URL
+     * @throws UnsupportedEncodingException if the platform charset is unavailable
+     */
     static String decodeFile(String file) throws UnsupportedEncodingException {
         return URLDecoder.decode(file, Charset.defaultCharset().name());
     }
 
+    /**
+     * Reconciles requested builds with Jenkins and completed local backups.
+     * Updates the selection in place and deletes old backup directories when retention is enabled.
+     *
+     * @param builds mutable build selection to reconcile
+     * @param lastNBuilds recent remote builds already selected
+     * @param lastBuildsCount requested number of recent builds
+     * @param jobResponse Jenkins job API response
+     * @param backupJobDirFile job-level backup directory when backup modes are enabled
+     * @param backupJob whether to select builds for backup creation
+     * @param useBackup whether local backups may supply selected builds
+     * @param backupRetention number of backups to retain, or negative for unlimited retention
+     * @return selected build numbers that should be read from local backups
+     */
     private static Set<Integer> updatedBuildsAndGetBackupBuilds(Set<Integer> builds, List<Integer> lastNBuilds, Integer lastBuildsCount, String jobResponse, File backupJobDirFile, Boolean backupJob, Boolean useBackup, Integer backupRetention) {
         Set<Integer> backupBuilds = new HashSet<>();
         List<Integer> allAvailableBackupBuilds = new ArrayList<>();
@@ -390,6 +560,7 @@ public class Main {
         }
         if ((backupJob || useBackup) && backupJobDirFile.exists()) {
             allAvailableBackupBuilds.addAll(Arrays.asList(Arrays.asList(Arrays.asList(new FileHelper().getDirFilesList(backupJobDirFile.getAbsolutePath(), "", false)).stream().map(new Function<String, Integer>() {
+                /** Extracts the build-number prefix from a backup directory name. */
                 @Override
                 public Integer apply(String t) {
                     String[] tokens = t.split(KEYS_SEPARATOR);
@@ -449,6 +620,16 @@ public class Main {
         return backupBuilds;
     }
 
+    /**
+     * Resolves explicit, recent, time-window, and parameter-filtered Jenkins build selections.
+     * Updates options and backup selections in place, then removes excluded builds.
+     *
+     * @param toolArgs options whose build selection and backup directory are updated
+     * @param excludedBuilds build numbers omitted from the selection and used as time-window anchors
+     * @param backupBuilds output set of selected builds available on local disk
+     * @param jobResponse Jenkins job API response
+     * @throws IOException if build metadata cannot be read
+     */
     private static void computeBuilds(ToolArgs toolArgs, Set<Integer> excludedBuilds, Set<Integer> backupBuilds, String jobResponse) throws IOException {
         if (toolArgs.useBackup || toolArgs.backupJob || toolArgs.removeBackup) {
             Validate.notEmpty(toolArgs.backupPath, "backupPath parameter is empty!");
@@ -518,6 +699,16 @@ public class Main {
         System.out.println("Parameter builds=" + sortedBuilds);
     }
 
+    /**
+     * Selects Jenkins builds and submits a worker for each node matching the node filter.
+     * Also prepares or removes backup directories when those modes are selected.
+     *
+     * @param completionService executor completion queue receiving node workers
+     * @param toolArgs job options and mutable build selection
+     * @param excludedBuilds builds to omit from processing
+     * @return number of workers submitted
+     * @throws IOException if job metadata or URL rewriting fails
+     */
     private static Integer submitBuildNodes(CompletionService<JenkinsNodeArtifactsFilter> completionService, ToolArgs toolArgs, Set<Integer> excludedBuilds) throws IOException {
         String apiJobUrl = replaceUrlPrefix(toolArgs.jobUrl, toolArgs.jobUrl, toolArgs.newUrlPrefix).concat("/api/json");
         String jobResponse = getUrlResponse(apiJobUrl, toolArgs.username, toolArgs.password);
@@ -572,6 +763,13 @@ public class Main {
         return processCount;
     }
 
+    /**
+     * Writes matching artifact or test links to the console and an HTML table grouped by node.
+     *
+     * @param toolArgs search mode, job URL, and HTML report builder
+     * @param buildNodesArtifacts matches keyed by build number and node URL
+     * @throws MalformedURLException if a node URL cannot be rewritten
+     */
     private static void printTheNodesOrTestsMatchingSearchedText(ToolArgs toolArgs, MultiValuedMap<String, String> buildNodesArtifacts) throws MalformedURLException {
         toolArgs.htmlGenerator.addParagraph("Print the nodes matching the searched text \"" + StringEscapeUtils.escapeHtml4(toolArgs.searchedText) + "\" in artifacts for ".concat(toolArgs.jobUrl).concat(": "));
         System.out.println("\nPrint the nodes matching the searched text \"" + toolArgs.searchedText + "\" in artifacts: ");
@@ -616,6 +814,14 @@ public class Main {
         toolArgs.htmlGenerator.startRow().addColumnValue("Nodes count: ".concat(String.valueOf(buildNodesArtifacts.keySet().size())), true).addColumnValue("").addColumnValue("").endRow().endTable().addNewLine();
     }
 
+    /**
+     * Compares failure text using Levenshtein distance as a percentage of the longer text.
+     *
+     * @param failure1 first normalized failure
+     * @param failure2 second normalized failure
+     * @param diffThreshold maximum permitted percentage difference
+     * @return whether the failures fall within the configured threshold
+     */
     private static Boolean failuresAreEqual(String failure1, String failure2, Double diffThreshold) {
         Integer maxDistance = Math.max(failure1.length(), failure2.length());
         if (maxDistance == 0) {
@@ -628,21 +834,42 @@ public class Main {
         return currentThreshold <= diffThreshold;
     }
 
+    /**
+    * Builds and caches escaped Jira links for test names or exact embedded test-case IDs.
+    * Tests carrying an ID marker match by that ID; other names require token boundaries.
+    * Empty names do not match any defects.
+     *
+     * @param toolArgs Jira issue metadata and browse URL
+     * @param shortTestName test name to match against issue descriptions
+     * @return comma-separated HTML issue links, or an empty string when none match
+     */
     private static String getIssuesLinks(ToolArgs toolArgs, String shortTestName) {
-        if (!testsIssuesMap.containsKey(shortTestName)) {
+        if (shortTestName == null || shortTestName.trim().isEmpty()) {
+            return "";
+        }
+        if (!toolArgs.testsIssuesMap.containsKey(shortTestName)) {
             Map<String, String> issuesMap = new HashedMap<>();
-            final String testCaseIdMarker = "TestCase ID:";
-            final Pattern rightTrimPattern = Pattern.compile("\\s*$");
+            Pattern testNamePattern = Pattern.compile("(?<![\\p{L}\\p{N}_-])" + Pattern.quote(shortTestName)
+                    + "(?![\\p{L}\\p{N}_-])");
+            Pattern testCaseIdPattern = Pattern.compile("TestCase\\s+ID\\s*:\\s*([^\\s,.;]+)", Pattern.CASE_INSENSITIVE);
+            Matcher testCaseIdMatch = testCaseIdPattern.matcher(shortTestName);
+            String testCaseId = testCaseIdMatch.find() ? testCaseIdMatch.group(1) : null;
             for (Map.Entry<String, String> issueDescription : toolArgs.issueDescriptionMap.entrySet()) {
-                int testCaseIdMarkerIndex = shortTestName.indexOf(testCaseIdMarker);
-                String testCaseId = null;
-                if (testCaseIdMarkerIndex >= 0) {
-                    testCaseId = shortTestName.substring(testCaseIdMarkerIndex);
-                    testCaseId = testCaseId.substring(testCaseId.indexOf(":") + 1);
-                    testCaseId = testCaseId.split("[,.]")[0];
-                    testCaseId = rightTrimPattern.matcher(testCaseId).replaceAll("");
+                String description = issueDescription.getValue();
+                if (description == null) {
+                    continue;
                 }
-                if (issueDescription.getValue().contains(shortTestName) || (testCaseIdMarkerIndex > 0 && issueDescription.getValue().toUpperCase().contains(testCaseIdMarker.concat(testCaseId).toUpperCase()))) {
+                boolean matches = testCaseId == null && testNamePattern.matcher(description).find();
+                if (!matches && testCaseId != null) {
+                    Matcher issueIdMatch = testCaseIdPattern.matcher(description);
+                    while (issueIdMatch.find()) {
+                        if (testCaseId.equalsIgnoreCase(issueIdMatch.group(1))) {
+                            matches = true;
+                            break;
+                        }
+                    }
+                }
+                if (matches) {
                     issuesMap.put(issueDescription.getKey(), toolArgs.jiraUrl.concat("/browse/").concat(issueDescription.getKey()));
                 }
             }
@@ -651,17 +878,25 @@ public class Main {
             Arrays.parallelSort(sortedIssuesArray, (o1, o2) -> o2.getKey().compareTo(o1.getKey()));
             String issuesLinks = "";
             for (Map.Entry<String, String> entry : sortedIssuesArray) {
-                issuesLinks = issuesLinks.concat("<a href=\"").concat(entry.getValue()).concat("\">").concat(entry.getKey()).concat("</a>&#44;&nbsp;");
+                issuesLinks = issuesLinks.concat(new HtmlGenerator().addLink(entry.getKey(), entry.getValue()).getContent())
+                        .concat("&#44;&nbsp;");
             }
             if (!issuesLinks.isEmpty()) {
                 issuesLinks = issuesLinks.substring(0, issuesLinks.lastIndexOf("&#44;&nbsp;"));
             }
-            testsIssuesMap.put(shortTestName, issuesLinks);
+            toolArgs.testsIssuesMap.put(shortTestName, issuesLinks);
         }
-        return testsIssuesMap.get(shortTestName);
+        return toolArgs.testsIssuesMap.get(shortTestName);
     }
 
-    private static void printTheCommonFailures(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesFailures) {
+    /**
+     * Groups similar failure occurrences and appends a frequency-sorted HTML table.
+     * Also writes grouped failures and source links to the console.
+     *
+     * @param toolArgs similarity threshold, report builder, and optional Jira settings
+     * @param buildNodesFailures failure occurrences keyed independently of their similarity groups
+     */
+    static void printTheCommonFailures(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesFailures) {
         toolArgs.htmlGenerator.addParagraph("Group common failures from tests reports for ".concat(toolArgs.jobUrl).concat(", ").concat(toolArgs.jobUrl2.equals(toolArgs.jobUrl) ? "" : toolArgs.jobUrl2).concat(": "));
         System.out.println("\nGroup common failures from tests reports: ");
         MultiValuedMap<String, TestFailure> groupedBuildNodesFailures = new ArrayListValuedHashMap<>();
@@ -724,7 +959,15 @@ public class Main {
         toolArgs.htmlGenerator.endTable().addNewLine();
     }
 
-    private static void printTheTestFailuresDifference(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesTestFailures, MultiValuedMap<String, TestFailure> buildNodesTestFailures2) {
+    /**
+     * Compares current failures against every reference failure with the same test identity.
+     * Appends separate tables for new failing tests and tests with changed failure messages.
+     *
+     * @param toolArgs build metadata, similarity threshold, and report/Jira settings
+     * @param buildNodesTestFailures current failure observations keyed by test identity
+     * @param buildNodesTestFailures2 historical failure observations using the same identity scheme
+     */
+    static void printTheTestFailuresDifference(ToolArgs toolArgs, MultiValuedMap<String, TestFailure> buildNodesTestFailures, MultiValuedMap<String, TestFailure> buildNodesTestFailures2) {
         toolArgs.htmlGenerator.addParagraph("Comparison results for job ".concat(toolArgs.jobUrl).concat(", builds ").concat(toolArgs.builds.toString()).concat(", compared to ").concat(toolArgs.jobUrl2).concat(", builds ").concat(toolArgs.referenceBuilds.toString()).concat(":"));
         System.out.println("\nComparison results for job ".concat(toolArgs.jobUrl).concat(", builds ").concat(toolArgs.builds.toString()).concat(", compared to ").concat(toolArgs.jobUrl2).concat(", builds ").concat(toolArgs.referenceBuilds.toString()).concat(":"));
         toolArgs.htmlGenerator.addParagraph("-> Found <b>".concat(String.valueOf(buildNodesTestFailures.keySet().size())).concat("</b> instead of <b>").concat(String.valueOf(buildNodesTestFailures2.keySet().size())).concat("</b> failed tests."));
@@ -780,7 +1023,15 @@ public class Main {
         System.out.println("-> Found ".concat(String.valueOf(differencesCount)).concat(" new test failures."));
     }
 
-   private static void computeStabilityList(ToolArgs toolArgs, ArrayListValuedHashMap<String, TestStatus> testsStatus) throws IOException {
+    /**
+     * Classifies tests using run counts, recent outcomes, and the configured pass-rate threshold.
+     * Overwrites the stability file with stable and unstable entries plus rate/count metadata.
+     *
+     * @param toolArgs stability thresholds and output file
+     * @param testsStatus observations grouped by suite/test identifier
+     * @throws IOException if the stability list cannot be written
+     */
+    private static void computeStabilityList(ToolArgs toolArgs, ArrayListValuedHashMap<String, TestStatus> testsStatus) throws IOException {
        System.out.println("\nCompute tests stability list file: " + toolArgs.stabilityListFile);
        Map<String, String> stableList = new HashedMap<>();
        Map<String, String> unstableList = new HashedMap<>();
@@ -841,6 +1092,15 @@ public class Main {
        }
    }
 
+    /**
+     * Runs the configured Jenkins workflow, processing build nodes in parallel.
+     * Produces search results, triage tables, stability data, or backups according to JVM options.
+     *
+     * @param args unused; configuration is read through {@link ToolArgs}
+     * @throws IOException if metadata, worker processing, or output writing fails
+     * @throws CloneNotSupportedException if reference options cannot be cloned
+     * @throws URISyntaxException if a configured request URI is invalid
+     */
     public static void main(String[] args) throws IOException, CloneNotSupportedException, URISyntaxException {
         // ======== GET AND PARSE THE ARGUMENTS VALUES ========
         ToolArgs toolArgs = new ToolArgs();

@@ -16,6 +16,9 @@ import org.apache.commons.io.IOUtils;
 import org.xml.sax.SAXException;
 
 /**
+ * Processes one Jenkins build node as a parallel task and retains its matching results.
+ * Reads artifacts from Jenkins or a local backup according to the supplied options.
+ *
  * Created by Teo on 8/8/2016.
  */
 class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter> {
@@ -30,6 +33,15 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
     ArrayListValuedHashMap<String, TestFailure> testsFailures = new ArrayListValuedHashMap<>();
     ArrayListValuedHashMap<String, TestStatus> testsStatus = new ArrayListValuedHashMap<>();
 
+    /**
+     * Creates a worker for a single build node.
+     *
+     * @param toolArgs artifact filters, credentials, and requested processing mode
+     * @param buildNumber number of the build being processed
+     * @param nodeUrl Jenkins node URL, or its encoded backup directory name
+     * @param useBackup whether artifacts are read from local disk
+     * @param backupBuildDirFile build-level backup directory
+     */
     JenkinsNodeArtifactsFilter(ToolArgs toolArgs, String buildNumber, String nodeUrl, Boolean useBackup, File backupBuildDirFile) {
         this.toolArgs = toolArgs;
         this.buildNumber = buildNumber;
@@ -39,6 +51,10 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
     }
 
     /**
+        * Processes the node and returns this worker with its collected results.
+        *
+        * @return this worker after processing completes
+        * @throws RuntimeException if artifact reading or JUnit parsing fails
      * @see java.util.concurrent.Callable#call()
      */
     @Override
@@ -54,8 +70,13 @@ class JenkinsNodeArtifactsFilter implements Callable<JenkinsNodeArtifactsFilter>
     }
 
     /**
-     * Find the searched text @searchedText in the current build node artifacts in a new thread.
-     * Saves the artifacts where it finds the @searchedText in matchedArtifacts list
+    * Filters and reads node artifacts, then backs them up, scans text, or parses JUnit.
+    * Updates the worker's matches, failures, and stability observations in place.
+    * Unavailable remote nodes or artifacts are logged and skipped.
+    *
+    * @throws IOException if backup or local artifact access fails
+    * @throws ParserConfigurationException if the XML parser cannot be configured
+    * @throws SAXException if a selected JUnit report is malformed
      */
     private void processNode() throws IOException, ParserConfigurationException, SAXException {
         File backupNodeDirFile = new File(backupBuildDirFile + File.separator + nodeUrl);
