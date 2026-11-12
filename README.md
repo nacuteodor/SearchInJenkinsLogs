@@ -37,6 +37,8 @@ Use [generate_failures_triage_report.sh](https://github.com/nacuteodor/SearchInJ
 
 [generate_github_actions_triage_report.sh](generate_github_actions_triage_report.sh) generates the same three triage tables for JUnit XML files uploaded as GitHub Actions artifacts: common failures, new failed tests, and tests with different failures. Test links point to the corresponding GitHub artifact download by default, or to individual tests in a published Allure 2 report when configured. The Jenkins entry point remains available.
 
+Generated hyperlinks open in a new tab with `noopener noreferrer` protection. HTTP(S) URLs without embedded credentials, relative paths, and fragments are supported. Unsafe or malformed targets are displayed as escaped, unlinked text; protocol-relative URLs such as `//host/path` are not linked.
+
 Requirements: JDK 8 or newer, [GitHub CLI](https://cli.github.com/), and `jq`. Authenticate `gh` locally, or supply `GH_TOKEN` in CI. The token needs Actions read access to the repository. The script compiles using the bundled libraries; a prebuilt JAR is not required.
 
 From this repository:
@@ -63,6 +65,7 @@ bash generate_github_actions_triage_report.sh
 | `DIFF_THRESHOLD` | `10` | Failure similarity percentage; must be finite and between 0 and 100 |
 | `OUTPUT_FILE` | `./ResultsReport.html` | Destination HTML file, overwritten on each invocation |
 | `ALLURE_REPORT_URL` | Unset | Published Allure 2 report root for the current run and attempt; test fragments are appended automatically |
+| `ALLURE_LINKS_OUTPUT_DIR` | Unset | Directory that receives Allure test-case files with Jira issue links; requires `ALLURE_REPORT_URL` and Jira integration |
 | `CONFIG_FILE` | Unset | Optional existing JSON configuration for Jira integration |
 
 When `CONFIG_FILE` enables Jira integration, all three tables include **Known Issues** links. Matching uses complete test-name tokens or exact `TestCase ID:` values against issue labels and description text, including Jira Cloud rich-text descriptions. Failed Jira requests or invalid pagination stop generation rather than presenting a partial defect index as complete.
@@ -119,6 +122,18 @@ The tool first matches JUnit `classname.name` against the generated Allure test'
 If any non-hidden generated test-case metadata is unreadable, malformed, or missing its `fullName`/`uid`, all current links retain their artifact URLs rather than trusting an incomplete index. Missing or unreadable suite metadata still permits `#testresult/` links. Raw `*-result.json` UUIDs are not generated report UIDs and cannot supply these links. Allure 3 and single-file report formats are not supported by this resolver.
 
 Use the URL of the report for the **current run and attempt**, not a moving latest-report URL. The URL must use HTTP(S) and have no fragment or embedded credentials. Do not include secret tokens in the URL: generated links are written into the HTML report. The report and its assets must be hosted at that URL; an artifact download URL cannot serve as a browsable Allure report. Reference failures are not linked to the current run's report. A console message reports how many failure observations received Allure links, or a warning explains why an invalid metadata index was not used.
+
+### Jira Issues in the Allure Report
+
+When Jira integration is enabled and `ALLURE_REPORT_URL` links a failed test, set `ALLURE_LINKS_OUTPUT_DIR` to write that test's Allure test-case file with its known Jira issues added as `issue` links. The issues use the same matching as the **Known Issues** column. Allure shows them in the test's Links section.
+
+Only the changed `data/test-cases/<uid>.json` files are written, under `$ALLURE_LINKS_OUTPUT_DIR/data/test-cases/`. The tool never modifies the downloaded artifacts. Copy that `data/` directory over the published Allure report, for example before deploying it:
+
+```bash
+cp -R "$ALLURE_LINKS_OUTPUT_DIR/data/." published-report/allure/data/
+```
+
+Tests without a matching Jira issue are left unchanged.
 
 ### Integrate Into a Workflow
 

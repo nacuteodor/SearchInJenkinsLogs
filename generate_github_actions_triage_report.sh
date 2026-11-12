@@ -25,6 +25,7 @@
 #   OUTPUT_FILE          HTML destination (default: $PWD/ResultsReport.html).
 #   ALLURE_REPORT_URL    Optional published Allure 2 report URL for the current run.
 #                        Matching requires generated data/test-cases/*.json in the artifacts.
+#   ALLURE_LINKS_OUTPUT_DIR  Optional directory receiving Allure test-case files with Jira issue links.
 #   CONFIG_FILE          Optional JSON configuration, including Jira integration settings.
 #
 # Example, from the tool repository:
@@ -147,6 +148,6 @@ mkdir -p "$work_dir/classes"
 javac -encoding UTF-8 -cp "$script_dir/lib/*" -d "$work_dir/classes" "$script_dir"/src/main/java/*.java
 java "-DjobUrl=$run_url" "-DreportsManifest=$work_dir/current.json" \
     "-DreferenceReportsManifest=$work_dir/reference.json" "-DjunitFilesFilter=$JUNIT_FILES_FILTER" \
-    "-DallureReportUrl=$ALLURE_REPORT_URL" \
+    "-DallureReportUrl=$ALLURE_REPORT_URL" "-DallureLinksOutputDir=${ALLURE_LINKS_OUTPUT_DIR:-}" \
     "-DdiffThreshold=$DIFF_THRESHOLD" "-DhtmlReportFile=$OUTPUT_FILE" \
     ${CONFIG_FILE:+"-DconfigFile=$CONFIG_FILE"} -cp "$work_dir/classes:$script_dir/lib/*" GitHubActionsReport

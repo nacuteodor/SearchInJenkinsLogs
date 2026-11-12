@@ -30,6 +30,7 @@ public class GitHubActionsTriageTest {
             rejected = true;
         }
         check(rejected, "External entities must be rejected");
+        verifyLinkTargets();
         verifyFailureStacktrace(toolArgs);
         verifyFailureEntities(toolArgs);
         verifyOptionalConfiguration();
@@ -39,6 +40,26 @@ public class GitHubActionsTriageTest {
         verifyJiraPagination();
         verifyDownloader();
         System.out.println("GitHub Actions triage checks passed");
+    }
+
+    /** Verifies report links open safely in a new tab while preserving HTML escaping. */
+    private static void verifyLinkTargets() {
+        String html = new HtmlGenerator().addLink("<test>", "https://reports.example.com/?name=%22test%22&run=1").getContent();
+        check(html.contains("target=\"_blank\"") && html.contains("rel=\"noopener noreferrer\""),
+                "Report links must open a new tab with opener and referrer protection");
+        check(html.contains("&lt;test&gt;") && html.contains("%22test%22&amp;run=1"),
+                "New-tab links must retain escaped labels and URL attributes");
+        for (String target : new String[] {"javascript:alert(1)", "JaVaScRiPt:alert(1)", "java\nscript:alert(1)",
+            "data:text/html,test", "file:///etc/passwd", "https://user:password@reports.example.com/",
+            "https://reports.example.com/\" onclick=\"alert(1)", "//reports.example.com/", null, ""}) {
+            String rejected = new HtmlGenerator().addLink("<test>", target).getContent();
+            check(rejected.equals("&lt;test&gt;"), "Unsafe links must become escaped, unlinked text");
+        }
+        for (String target : new String[] {"http://reports.example.com/", "HTTPS://reports.example.com/",
+            "report.html#test", "#testresult/123"}) {
+            check(new HtmlGenerator().addLink("test", target).getContent().contains("target=\"_blank\""),
+                "Valid HTTP(S) and relative links must retain safe new-tab behavior");
+        }
     }
 
         /**
@@ -430,6 +451,10 @@ public class GitHubActionsTriageTest {
         check(secondHtml.contains("https://second.example.com/browse/QA-202") && !secondHtml.contains("QA-101"),
             "Jira link caches must not leak across report configurations");
         check(secondHtml.split("Known Issues", -1).length == 4, "All three triage tables must include Jira columns");
+        int links = secondHtml.split("<a href=", -1).length - 1;
+        check(links >= 4 && secondHtml.split("target=\"_blank\"", -1).length - 1 == links
+            && secondHtml.split("rel=\"noopener noreferrer\"", -1).length - 1 == links,
+            "Rendered test and Jira links must all retain safe new-tab attributes");
         ToolArgs markers = new ToolArgs();
         markers.integrateJira = true;
         markers.jiraUrl = "https://jira.example.com";

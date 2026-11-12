@@ -115,7 +115,7 @@ public class GitHubActionsReport {
                     + "and check ARTIFACT_NAME_FILTER / JUNIT_FILES_FILTER.");
         }
         if (!reference) {
-            applyAllureLinks(reports, failures);
+            applyAllureLinks(reports, failures, toolArgs);
         }
         if (reference && xmlCount == 0) {
             toolArgs.htmlGenerator.addParagraph("No reference JUnit reports were available; "
@@ -135,7 +135,8 @@ public class GitHubActionsReport {
      * @throws Exception if the configured URL is invalid or report metadata cannot be read
      */
     private static void applyAllureLinks(List<Map<String, Object>> reports,
-                                         MultiValuedMap<String, TestFailure> failures) throws Exception {
+                                         MultiValuedMap<String, TestFailure> failures,
+                                         ToolArgs toolArgs) throws Exception {
         String baseUrl = System.getProperty("allureReportUrl", "");
         if (baseUrl.isEmpty()) {
             return;
@@ -148,6 +149,7 @@ public class GitHubActionsReport {
         }
         Map<String, Set<String>> testIds = new HashMap<>();
         Map<String, Set<String>> fileAndTitleIds = new HashMap<>();
+        Map<String, Map<?, ?>> testCasesByUid = new HashMap<>();
         for (Map<String, Object> report : reports) {
             Path directory = Paths.get(report.get("directory").toString());
             List<Path> caseFiles;
@@ -184,6 +186,7 @@ public class GitHubActionsReport {
                     return;
                 }
                 testIds.computeIfAbsent((String) fullName, ignored -> new HashSet<>()).add((String) uid);
+                testCasesByUid.put((String) uid, testCase);
                 Object name = testCase.get("name");
                 if (name instanceof String && !((String) name).isEmpty()) {
                     // Playwright's Allure fullName is file:line:column, so also index by file and title.
@@ -225,10 +228,50 @@ public class GitHubActionsReport {
                 failure.testUrl = reportUri.resolve(parentSuite == null ? "#testresult/" + uid
                         : "#suites/" + parentSuite + "/" + uid + "/").toASCIIString();
                 linked++;
+                addJiraLinks(toolArgs, failure, testCasesByUid.get(ids.iterator().next()));
             }
         }
         System.out.println("Linked " + linked + " of " + failures.size() + " failure observations to Allure; "
                 + "unmatched or ambiguous tests retain artifact links.");
+    }
+
+    /**
+     * Writes a copy of an Allure test-case file with its Jira issues as issue links.
+     * The copy goes to {@code allureLinksOutputDir/data/test-cases} so it can overlay the published report.
+     *
+     * @param toolArgs Jira settings
+     * @param failure the failed test whose name is matched against Jira issues
+     * @param testCase the parsed Allure test-case JSON object
+     * @throws IOException if the copy cannot be written
+     */
+    @SuppressWarnings("unchecked")
+    private static void addJiraLinks(ToolArgs toolArgs, TestFailure failure, Map<?, ?> testCase) throws IOException {
+        String outputDir = System.getProperty("allureLinksOutputDir", "");
+        if (outputDir.isEmpty() || !Boolean.TRUE.equals(toolArgs.integrateJira) || testCase == null) {
+            return;
+        }
+        List<String> issueKeys = Main.findIssueKeys(toolArgs, failure.shortTestName);
+        if (issueKeys.isEmpty()) {
+            return;
+        }
+        Map<Object, Object> updated = new java.util.LinkedHashMap<>(testCase);
+        List<Object> links = new java.util.ArrayList<>();
+        Object existing = updated.get("links");
+        if (existing instanceof List) {
+            links.addAll((List<Object>) existing);
+        }
+        for (String issueKey : issueKeys) {
+            Map<String, String> link = new java.util.LinkedHashMap<>();
+            link.put("name", issueKey);
+            link.put("url", toolArgs.jiraUrl + "/browse/" + issueKey);
+            link.put("type", "issue");
+            links.add(link);
+        }
+        updated.put("links", links);
+        Path destination = Paths.get(outputDir, "data", "test-cases", testCase.get("uid") + ".json");
+        Files.createDirectories(destination.getParent());
+        Files.write(destination, Configuration.defaultConfiguration().jsonProvider().toJson(updated)
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     /**

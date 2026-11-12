@@ -848,37 +848,9 @@ public class Main {
             return "";
         }
         if (!toolArgs.testsIssuesMap.containsKey(shortTestName)) {
-            Map<String, String> issuesMap = new HashedMap<>();
-            Pattern testNamePattern = Pattern.compile("(?<![\\p{L}\\p{N}_-])" + Pattern.quote(shortTestName)
-                    + "(?![\\p{L}\\p{N}_-])");
-            Pattern testCaseIdPattern = Pattern.compile("TestCase\\s+ID\\s*:\\s*([^\\s,.;]+)", Pattern.CASE_INSENSITIVE);
-            Matcher testCaseIdMatch = testCaseIdPattern.matcher(shortTestName);
-            String testCaseId = testCaseIdMatch.find() ? testCaseIdMatch.group(1) : null;
-            for (Map.Entry<String, String> issueDescription : toolArgs.issueDescriptionMap.entrySet()) {
-                String description = issueDescription.getValue();
-                if (description == null) {
-                    continue;
-                }
-                boolean matches = testCaseId == null && testNamePattern.matcher(description).find();
-                if (!matches && testCaseId != null) {
-                    Matcher issueIdMatch = testCaseIdPattern.matcher(description);
-                    while (issueIdMatch.find()) {
-                        if (testCaseId.equalsIgnoreCase(issueIdMatch.group(1))) {
-                            matches = true;
-                            break;
-                        }
-                    }
-                }
-                if (matches) {
-                    issuesMap.put(issueDescription.getKey(), toolArgs.jiraUrl.concat("/browse/").concat(issueDescription.getKey()));
-                }
-            }
-            // sort the Jira issues in descendant order
-            Map.Entry<String, String>[] sortedIssuesArray = issuesMap.entrySet().toArray(new Map.Entry[0]);
-            Arrays.parallelSort(sortedIssuesArray, (o1, o2) -> o2.getKey().compareTo(o1.getKey()));
             String issuesLinks = "";
-            for (Map.Entry<String, String> entry : sortedIssuesArray) {
-                issuesLinks = issuesLinks.concat(new HtmlGenerator().addLink(entry.getKey(), entry.getValue()).getContent())
+            for (String issueKey : findIssueKeys(toolArgs, shortTestName)) {
+                issuesLinks = issuesLinks.concat(new HtmlGenerator().addLink(issueKey, toolArgs.jiraUrl.concat("/browse/").concat(issueKey)).getContent())
                         .concat("&#44;&nbsp;");
             }
             if (!issuesLinks.isEmpty()) {
@@ -887,6 +859,46 @@ public class Main {
             toolArgs.testsIssuesMap.put(shortTestName, issuesLinks);
         }
         return toolArgs.testsIssuesMap.get(shortTestName);
+    }
+
+    /**
+     * Finds the Jira issues whose description references a test, by test-case ID or by complete test name.
+     *
+     * @param toolArgs Jira issue metadata
+     * @param shortTestName test name to match against issue descriptions
+     * @return matching issue keys in descending order, empty when none match
+     */
+    static List<String> findIssueKeys(ToolArgs toolArgs, String shortTestName) {
+        List<String> issueKeys = new ArrayList<>();
+        if (shortTestName == null || shortTestName.trim().isEmpty()) {
+            return issueKeys;
+        }
+        Pattern testNamePattern = Pattern.compile("(?<![\\p{L}\\p{N}_-])" + Pattern.quote(shortTestName)
+                + "(?![\\p{L}\\p{N}_-])");
+        Pattern testCaseIdPattern = Pattern.compile("TestCase\\s+ID\\s*:\\s*([^\\s,.;]+)", Pattern.CASE_INSENSITIVE);
+        Matcher testCaseIdMatch = testCaseIdPattern.matcher(shortTestName);
+        String testCaseId = testCaseIdMatch.find() ? testCaseIdMatch.group(1) : null;
+        for (Map.Entry<String, String> issueDescription : toolArgs.issueDescriptionMap.entrySet()) {
+            String description = issueDescription.getValue();
+            if (description == null) {
+                continue;
+            }
+            boolean matches = testCaseId == null && testNamePattern.matcher(description).find();
+            if (!matches && testCaseId != null) {
+                Matcher issueIdMatch = testCaseIdPattern.matcher(description);
+                while (issueIdMatch.find()) {
+                    if (testCaseId.equalsIgnoreCase(issueIdMatch.group(1))) {
+                        matches = true;
+                        break;
+                    }
+                }
+            }
+            if (matches) {
+                issueKeys.add(issueDescription.getKey());
+            }
+        }
+        issueKeys.sort(java.util.Comparator.reverseOrder());
+        return issueKeys;
     }
 
     /**

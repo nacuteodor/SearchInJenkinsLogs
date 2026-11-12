@@ -1,5 +1,7 @@
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -107,15 +109,44 @@ public class HtmlGenerator {
 
     /**
      * Appends a hyperlink with an HTML-escaped label and target attribute.
-     * Does not validate the target's URL scheme.
+    * Opens the target in a new tab without granting access to the report's window.
+    * Unsafe or malformed targets are rendered as escaped, unlinked text.
      *
      * @param name plain-text link label
      * @param link target URL
      * @return this builder
      */
     public HtmlGenerator addLink(String name, String link) {
-        content = content.concat("<a href=\"").concat(StringEscapeUtils.escapeHtml4(link)).concat("\">").concat(StringEscapeUtils.escapeHtml4(name)).concat("</a>\n");
+        if (!isSafeLink(link)) {
+            return addText(StringEscapeUtils.escapeHtml4(name));
+        }
+        content = content.concat("<a href=\"").concat(StringEscapeUtils.escapeHtml4(link))
+            .concat("\" target=\"_blank\" rel=\"noopener noreferrer\">")
+            .concat(StringEscapeUtils.escapeHtml4(name)).concat("</a>\n");
         return this;
+    }
+
+    /**
+     * Allows HTTP(S) URLs without embedded credentials and relative report links.
+     *
+     * @param link target to validate
+     * @return whether the target can be rendered as a report hyperlink
+     */
+    private static boolean isSafeLink(String link) {
+        if (link == null || link.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            URI target = new URI(link);
+            String scheme = target.getScheme();
+            if (scheme == null) {
+                return target.getRawAuthority() == null;
+            }
+            return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && target.getHost() != null && target.getRawUserInfo() == null;
+        } catch (URISyntaxException e) {
+            return false;
+        }
     }
 
     /**
