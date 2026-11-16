@@ -17,10 +17,15 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.CharEncoding;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.util.EntityUtils;
 
 import static org.apache.commons.lang3.StringUtils.isEmpty;
 
 /**
+ * Loads tool options from JSON and JVM properties, applying defaults and property overrides.
+ * Also initializes report builders, optional stability data, and Jira issue metadata.
+ *
  * Created by Teo on 9/3/2016.
  */
 public class ToolArgs implements Cloneable {
@@ -144,7 +149,16 @@ public class ToolArgs implements Cloneable {
     String jiraJql;
     String jiraUrl;
     Map<String, String> issueDescriptionMap;
+    Map<String, String> testsIssuesMap = new HashMap<>();
 
+    /**
+     * Resolves configuration and initializes the services needed by the selected options.
+     * May read a stability file or query Jira when those integrations are enabled.
+     *
+     * @throws IOException if configuration, stability data, or Jira responses cannot be read
+     * @throws URISyntaxException if a constructed Jira request URI is invalid
+     * @throws IllegalArgumentException if required options or numeric values are invalid
+     */
     public ToolArgs() throws IOException, URISyntaxException {
         configFile = isEmpty(System.getProperty("configFile")) ? null : new File(System.getProperty("configFile"));
         System.out.println("Parameter configFile=" + configFile);
@@ -277,6 +291,12 @@ public class ToolArgs implements Cloneable {
         issueDescriptionMap = integrateJira ? getJiraIssues() : null;
     }
 
+    /**
+     * Loads raw option values and Jira settings from the configured JSON file.
+     * Does nothing when no config file is supplied; JVM overrides are applied by the constructor.
+     *
+     * @throws IOException if the configuration file cannot be read
+     */
     public void parseConfig() throws IOException {
         if (configFile == null) {
             return;
@@ -327,21 +347,33 @@ public class ToolArgs implements Cloneable {
         jiraPassword = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(PASSWORD));
         List<Map<String, String>> headersList = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(HEADERS).concat("[*]"));
         jiraHeaders = new HashMap<>();
-        for (Map<String, String> header : headersList) {
-            jiraHeaders.put(header.get(NAME), header.get(VALUE));
+        if (headersList != null) {
+            for (Map<String, String> header : headersList) {
+                jiraHeaders.put(header.get(NAME), header.get(VALUE));
+            }
         }
         jiraJql = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(JQL));
         jiraUrl = JsonPath.using(conf).parse(configJson).read(PATH_PREFIX.concat(JIRA).concat(PATH_SEPARATOR).concat(URL));
     }
 
+    /**
+     * Creates a shallow copy, retaining shared collections and helper instances.
+     *
+     * @return a copy whose scalar options can be adjusted for the reference job
+     * @throws CloneNotSupportedException if cloning is not supported
+     */
     @Override
     public Object clone() throws CloneNotSupportedException {
         return super.clone();
     }
 
     /**
-     * @return an expanded Set of @builds parameter value
-     * For e.g 1,2,3-5, it will return a Set [1, 2, 3, 4, 5]
+    * Expands comma-separated build numbers and inclusive ranges into a set.
+    * For example, {@code 1,2,3-5} becomes {@code [1, 2, 3, 4, 5]}.
+    *
+    * @param builds build selection string, or null/empty for no explicit selection
+    * @return distinct selected build numbers
+    * @throws NumberFormatException if a build or range endpoint is not an integer
      */
     private static Set<Integer> parseBuilds(String builds) {
         Set<Integer> buildsSet = new HashSet<>();
@@ -365,6 +397,9 @@ public class ToolArgs implements Cloneable {
 
     /**
      * Used for parsing a parameter with "key1=value1;key2=value2;..." values into a Map
+    *
+    * @param params semicolon-separated assignments, or null/empty for no filters
+    * @return parameter names mapped to their requested values
      */
     private static Map<String, String> parseKeyValuesIntoMap(String params) {
         Map<String, String> buildParamsFilter = new HashMap<>();
@@ -383,17 +418,35 @@ public class ToolArgs implements Cloneable {
         return buildParamsFilter;
     }
 
+    /**
+     * Prefers a nonempty JVM property to the supplied fallback.
+     *
+     * @param systemProperty property name to read
+     * @param defaultValue fallback when the property is absent or empty
+     * @return the property value or fallback
+     */
     public static String getNonEmptyValue(String systemProperty, String defaultValue) {
         String paramValue = System.getProperty(systemProperty);
         return (!isEmpty(paramValue)) ? paramValue : defaultValue;
     }
 
+    /**
+     * Fetches paginated Jira search results for the configured JQL expression.
+     * Combines issue labels and descriptions for matching against test names.
+    * Non-success responses and invalid pagination fail rather than returning a partial issue index.
+     *
+     * @return issue keys mapped to their searchable labels and description text
+     * @throws IOException if an HTTP request or response read fails
+     * @throws URISyntaxException if a paginated request URI is invalid
+     */
     private Map<String, String> getJiraIssues() throws IOException, URISyntaxException {
-        String queryUrl = jiraApiUrl.concat("/search/jql?jql=").concat(URLEncoder.encode(jiraJql, CharEncoding.UTF_8).replace("+", "%20"));
-        System.out.println("Jira query url: ".concat(queryUrl));
+        URIBuilder query = new URIBuilder(jiraApiUrl.concat("/search/jql"))
+            .addParameter("jql", jiraJql).addParameter("fields", "description,labels")
+            .addParameter("maxResults", "50");
+        System.out.println("Jira query url: " + query.build());
 
         Configuration conf = Configuration.defaultConfiguration().addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL, Option.SUPPRESS_EXCEPTIONS);
-        HttpGet request = new HttpGet(queryUrl);
+        HttpGet request = new HttpGet(query.build());
 
         // add request headers
         for (Map.Entry<String, String> entry : jiraHeaders.entrySet()) {
@@ -403,32 +456,74 @@ public class ToolArgs implements Cloneable {
 
         Map<String, String> issueDescriptionMap = new HashedMap<>();
         boolean paginationFinished = false;
-        String nextPageToken = "";
+        String nextPageToken = null;
+        Set<String> seenTokens = new HashSet<>();
         while (!paginationFinished) {
-            // added pagination calls (which are limited to 50 maxResults) to be able to get all the jira issues.
-            request.setURI(new URI(queryUrl.concat("&").concat("fields=description,labels").concat("&").concat("maxResults=50").concat("&").concat("nextPageToken=").concat(String.valueOf(nextPageToken))));
-            HttpResponse response = Main.getUrlHttpResponse(request, jiraUsername, jiraPassword);
-            String pageResp = IOUtils.toString(response.getEntity().getContent());
-            System.out.println("Jira call response code: " + response.getStatusLine().getStatusCode());
-            if (response.getStatusLine().getStatusCode() != 200) {
-                System.out.println("Jira call response error: " + pageResp);
-                return issueDescriptionMap;
+            if (nextPageToken != null) {
+                query.setParameter("nextPageToken", nextPageToken);
             }
+            request.setURI(query.build());
+            HttpResponse response = Main.getUrlHttpResponse(request, jiraUsername, jiraPassword);
+            int responseCode = response.getStatusLine().getStatusCode();
+            System.out.println("Jira call response code: " + responseCode);
+            if (responseCode != 200) {
+                EntityUtils.consume(response.getEntity());
+                throw new IOException("Jira search failed with HTTP " + responseCode);
+            }
+            String pageResp = EntityUtils.toString(response.getEntity(), CharEncoding.UTF_8);
             List<Map<String, Object>> issues = JsonPath.read(pageResp, "$.issues[*]");
             for (Map<String, Object> issue : issues) {
                 String issueId = (String) issue.get("key");
                 Object fields = issue.get("fields");
                 Object descriptionObject = JsonPath.using(conf).parse(fields).read("$.description");
-                String description = descriptionObject == null ? "" : descriptionObject.toString();
-                String labels = JsonPath.read(fields, "$.labels").toString();
+                String description = getDescriptionText(descriptionObject);
+                Object labelsObject = JsonPath.using(conf).parse(fields).read("$.labels");
+                String labels = labelsObject == null ? "" : labelsObject.toString();
                 issueDescriptionMap.put(issueId, labels.concat("\n") + description);
             }
-            paginationFinished = JsonPath.read(pageResp, "$.isLast");
+            Object lastPage = JsonPath.using(conf).parse(pageResp).read("$.isLast");
+            if (!(lastPage instanceof Boolean)) {
+                throw new IOException("Jira search response is missing a boolean isLast value");
+            }
+            paginationFinished = (Boolean) lastPage;
             if (!paginationFinished) {
-                nextPageToken = JsonPath.read(pageResp, "$.nextPageToken").toString();
+                Object token = JsonPath.using(conf).parse(pageResp).read("$.nextPageToken");
+                if (!(token instanceof String) || ((String) token).isEmpty() || !seenTokens.add((String) token)) {
+                    throw new IOException("Jira search response has a missing or repeated pagination token");
+                }
+                nextPageToken = (String) token;
             }
         }
         System.out.println("Issues found: ".concat(issueDescriptionMap.keySet().toString()));
         return issueDescriptionMap;
+    }
+
+    /**
+     * Extracts searchable text from a plain Jira description or an Atlassian rich-text document.
+     * Adjacent text nodes are joined; paragraphs and headings retain line boundaries.
+     *
+     * @param description plain text, rich-text node, content list, or null
+     * @return readable description text, or empty text for unsupported/absent content
+     */
+    private static String getDescriptionText(Object description) {
+        if (description instanceof String) {
+            return (String) description;
+        }
+        if (description instanceof Map) {
+            Map<?, ?> node = (Map<?, ?>) description;
+            if (node.get("text") instanceof String) {
+                return (String) node.get("text");
+            }
+            String text = getDescriptionText(node.get("content"));
+            return "paragraph".equals(node.get("type")) || "heading".equals(node.get("type")) ? text + "\n" : text;
+        }
+        if (description instanceof List) {
+            StringBuilder text = new StringBuilder();
+            for (Object node : (List<?>) description) {
+                text.append(getDescriptionText(node));
+            }
+            return text.toString();
+        }
+        return "";
     }
 }

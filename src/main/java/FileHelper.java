@@ -18,17 +18,21 @@ import org.apache.commons.io.filefilter.IOFileFilter;
 import org.apache.commons.lang3.ArrayUtils;
 
 /**
+ * Provides text-file, directory-filtering, and GZIP helpers for local build backups.
+ * Compression methods use GZIP streams even when destination names end in {@code .zip}.
+ *
  * Created by Teo on 9/3/2016.
  */
 public class FileHelper {
     private static final IOFileFilter ALL_FILES_FILTER = new FileHelper().getFilesFilter("");
 
     /**
-     * Zip the files filtered by fileFilter from fromPath to toPath.
+    * Recursively GZIP-compresses matching text files into the destination directory.
+    * Output names use the source basename plus {@code .zip} and are deleted on JVM exit.
      *
-     * @param fromPath
-     * @param toPath
-     * @param fileFilter
+    * @param fromPath source directory; a missing directory produces no output
+    * @param toPath destination directory for compressed files
+    * @param fileFilter substring required in each source filename
      * @return the number of files zipped.
      * @throws IOException from accessing a file.
      */
@@ -54,15 +58,16 @@ public class FileHelper {
     /**
      * Get the filenames list from directoryName directory, which contains the filter string
      *
-     * @param directoryName
-     * @param filter
+    * @param directoryName directory to list
+    * @param filter substring required in each returned entry name
      * @param recursive if it should search recursive in directoryName.
-     * @return
+    * @return matching basenames, or an empty array when the directory cannot be listed
      */
     public String[] getDirFilesList(String directoryName, final String filter, boolean recursive) {
         File dir = new File(directoryName);
         FilenameFilter filesFilter = new FilenameFilter() {
 
+            /** Matches child names containing the configured substring. */
             @Override
             public boolean accept(File dir, String name) {
                 return name.contains(filter);
@@ -92,8 +97,8 @@ public class FileHelper {
     /**
      * Write data to a file with appending.
      *
-     * @param file
-     * @param data
+    * @param file destination text file, created if absent
+    * @param data text to append; nonempty input is followed by a platform newline
      * @throws IOException from writing data to a file.
      */
     public void appendDataToFile(File file, String data) throws IOException {
@@ -112,10 +117,10 @@ public class FileHelper {
     }
 
     /**
-     * Write data from a file to a file.
+    * Appends source text to a destination line by line using the platform charset.
      *
-     * @param fromfile
-     * @param toFile
+    * @param fromfile source text file
+    * @param toFile destination text file; existing contents are retained
      * @throws IOException from reading/writing data to a file.
      */
     public void copyFromFileToFile(File fromfile, File toFile) throws IOException {
@@ -133,11 +138,12 @@ public class FileHelper {
     }
 
     /**
-     * Zip the file "file" to zip file "toFile".
+    * Appends a GZIP member containing the source text to the destination file.
+    * Text is read and written line by line using the platform default charset.
      *
-     * @param file
-     * @param toFile
-     * @throws IOException
+    * @param file source text file
+    * @param toFile destination GZIP stream, despite its possible {@code .zip} extension
+    * @throws IOException if the source or destination cannot be accessed
      */
     public void zipFile(File file, File toFile) throws IOException {
         String line = null;
@@ -159,10 +165,10 @@ public class FileHelper {
     }
 
     /**
-     * Create a new zip empty file "file".
+    * Creates an empty GZIP stream, replacing any existing destination contents.
      *
-     * @param file
-     * @throws IOException
+    * @param file destination compressed file
+    * @throws IOException if the destination cannot be written
      */
     public void newZipEmptyFile(File file) throws IOException {
         BufferedWriter bw = null;
@@ -176,11 +182,11 @@ public class FileHelper {
     }
 
     /**
-     * Unzip the zip file "file" to file "toFile".
+    * Decompresses a GZIP text stream and appends its lines to the destination.
      *
-     * @param file
-     * @param toFile
-     * @throws IOException
+    * @param file source GZIP stream
+    * @param toFile destination text file; existing contents are retained
+    * @throws IOException if decompression, reading, or writing fails
      */
     public void unzipFile(File file, File toFile) throws IOException {
         String line = null;
@@ -201,17 +207,19 @@ public class FileHelper {
     /**
      * Get a IOFileFilter instance which filter files containing filter value.
      *
-     * @param filter
-     * @return
+    * @param filter substring required by the single-file acceptance method
+    * @return a filter for the backup directory traversal
      */
     public IOFileFilter getFilesFilter(final String filter) {
         IOFileFilter fileFilter = new IOFileFilter() {
 
+            /** Matches when the directory's name contains the supplied child name. */
             @Override
             public boolean accept(File dir, String name) {
                 return dir.getName().contains(name);
             }
 
+            /** Matches file names containing the configured substring. */
             @Override
             public boolean accept(File file) {
                 return file.getName().contains(filter);
@@ -224,8 +232,8 @@ public class FileHelper {
     /**
      * Create a File from filePath which should be deleted in application exit.
      *
-     * @param filePath
-     * @return
+    * @param filePath directory path to create
+    * @return the directory registered for deletion on JVM exit
      * @throws IOException from deleting on exit or creating the directories from filePath.
      */
     public File createTemporaryDirFile(String filePath) throws IOException {
